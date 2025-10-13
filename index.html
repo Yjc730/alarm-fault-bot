@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alarm-Fault 啟動頁</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at center, #1a1f2e, #0e1117);
+      font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+      color: #e6e6e6;
+      text-align: center;
+    }
+    h1 {
+      font-size: 26px;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+    p {
+      color: #a0a9b8;
+      font-size: 14px;
+      max-width: 320px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    button {
+      background: #2e6be6;
+      color: white;
+      border: none;
+      padding: 12px 28px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+    button:hover {
+      background: #4588ff;
+      transform: scale(1.05);
+    }
+    footer {
+      position: absolute;
+      bottom: 20px;
+      font-size: 12px;
+      color: #6e788a;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 Alarm-Fault 對話機器人</h1>
+  <p>這是一個純前端的基地台告警/故障查詢工具，<br>可依據 ID 或關鍵字提供中文解釋與建議。</p>
+  <button onclick="location.href='alarm_fault_bot_chat_zh_v2.html'">開始使用</button>
+  <footer>© 2025 Alarm-Fault Bot v2</footer>
+</body>
+</html>
