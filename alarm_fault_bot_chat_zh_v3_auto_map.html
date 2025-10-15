@@ -1,1 +1,272 @@
-ok
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Alarm-Fault 對話機器人（v3｜自動欄位對應）</title>
+  <meta name="color-scheme" content="dark"/>
+  <style>
+    :root { --bg:#0f1115; --panel:#161a22; --line:#252b36; --text:#e6e6e6; --muted:#a4afc4; --accent:#2e6be6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC","PingFang TC","Microsoft JhengHei",Arial,sans-serif; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+    .title { font-weight: 800; font-size: 20px; }
+    .desc { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .box { margin-top: 12px; border:1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; }
+    .msgs { height: 64vh; overflow:auto; padding: 12px; }
+    .msg { margin: 8px 0; display:flex; gap:8px; align-items:flex-start; }
+    .msg.me { justify-content: flex-end; }
+    .bubble { padding: 10px 12px; background:#11151e; border:1px solid var(--line); border-radius: 12px; max-width: 85%; white-space: pre-wrap; line-height: 1.6; }
+    .msg.me .bubble { background: var(--accent); border-color: var(--accent); color: white; }
+    .inputbar { display:flex; gap:8px; padding: 10px; border-top:1px solid var(--line); background: #121620; }
+    .inputbar input { flex:1; padding: 12px; border-radius: 10px; border:1px solid var(--line); background:#0d1119; color:var(--text); }
+    .inputbar button { padding: 12px 16px; border-radius: 10px; border:1px solid var(--accent); background: var(--accent); color:white; cursor:pointer; }
+    .tag { display:inline-block; padding:1px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:#b9c4db; margin-right:6px; }
+    .kv { margin-top:6px; font-size: 13px; color:#c8d1e6; }
+    .kv b { color:#9fb0d9; }
+    .subtle { color:#9aa6bd; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">Alarm-Fault 對話機器人（v3｜自動欄位對應）</div>
+    <div class="desc">輸入 ID（如 <b>7115-2</b>）或自然語句（如「<i>7115-2 是什麼？</i>」「<i>該怎麼辦</i>」）。<br/>資料只來自同資料夾的 <code>alarm_fault_data.json</code>，離線可用。</div>
+    <div class="box">
+      <div id="msgs" class="msgs"></div>
+      <div class="inputbar">
+        <input id="q" type="text" placeholder="試試：7115-2 是什麼？ / 7115-2 要怎麼處理 / antenna fault">
+        <button id="send">送出</button>
+      </div>
+    </div>
+    <div id="hint" class="subtle">正在載入資料…</div>
+  </div>
+
+  <script>
+    const msgs = document.getElementById('msgs');
+    const q = document.getElementById('q');
+    const send = document.getElementById('send');
+    const hint = document.getElementById('hint');
+    let DATA = [];
+    let lastHit = null;
+
+    function add(content, me=false) {
+      const row = document.createElement('div');
+      row.className = 'msg' + (me ? ' me' : '');
+      const b = document.createElement('div');
+      b.className = 'bubble';
+      if (typeof content === 'string') b.textContent = content; else b.appendChild(content);
+      row.appendChild(b);
+      msgs.appendChild(row);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function sanitize(s){ return (s ?? '').toString(); }
+
+    const GLOSSARY = [
+      ["alarm","告警"],["fault","故障"],["warning","警告"],["critical","嚴重"],["major","重大"],["minor","次要"],
+      ["cleared","已清除"],["clear","清除"],["active","啟動"],["inactive","未啟動"],
+      ["power","電源"],["voltage","電壓"],["current","電流"],["overvoltage","過電壓"],["undervoltage","欠壓"],
+      ["overcurrent","過電流"],["short circuit","短路"],["battery","電池"],["rectifier","整流器"],
+      ["temperature","溫度"],["overheat","過熱"],["fan","風扇"],["cooling","散熱"],
+      ["antenna","天線"],["feeder","饋線"],["vswr","駐波比"],["rf","射頻"],["transmitter","發射端"],["receiver","接收端"],
+      ["uplink","上行"],["downlink","下行"],["baseband","基頻"],["bb","基頻"],["cabinet","機櫃"],
+      ["synchronization","同步"],["gps","GPS"],["clock","時鐘"],["pll","鎖相迴路"],
+      ["module","模組"],["board","板卡"],["unit","單元"],["port","埠"],["link down","鏈路中斷"],["link","鏈路"],
+      ["software","軟體"],["firmware","韌體"],["hardware","硬體"],["configuration","設定"],["timeout","逾時"],
+      ["restart","重啟"],["reboot","重新啟動"],["failure","失效"],["degraded","效能降低"],["maintenance","維護"],
+      ["threshold","門檻"],["interference","干擾"],["jam","阻塞"],["congestion","壅塞"],
+      ["site","站點"],["node","節點"],["sector","扇區"],["cell","小區"]
+    ];
+    function zhGlossary(text){
+      let out = sanitize(text);
+      GLOSSARY.forEach(([en, zh]) => {
+        const re = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        out = out.replace(re, zh);
+      });
+      return out;
+    }
+
+    // Excel/JSON 常見欄位別名 → 標準欄位
+    const ALIASES = {
+      id: ['id','alert number (alarm-fault)','alert number','alarm id','code','alarm number'],
+      alarm_name: ['alarm name','alarm name in previous release','alarm'],
+      fault_name: ['fault name','fault name in previous release','fault'],
+      meaning: ['meaning','meaning in previous release','description'],
+      probable_cause: ['probable cause','probable cause in previous release','cause'],
+      severity: ['default severity','severity','alarm severity information'],
+      event_type: ['event type','event type in previous release','type'],
+      clearing: ['clearing','clearing in previous release','clear action','how to clear'],
+      ttl: ['time to live','time to live in previous release','ttl'],
+      product: ['used in product','used in product in previous release','product']
+    };
+    function pick(obj, names){
+      const keys = Object.keys(obj);
+      // 先嚴格等於（忽略大小寫）
+      for(const n of names){
+        const k = keys.find(k=>k.toLowerCase()===n.toLowerCase());
+        if(k) return obj[k];
+      }
+      // 再部分包含
+      for(const n of names){
+        const k = keys.find(k=>k.toLowerCase().includes(n.toLowerCase()));
+        if(k) return obj[k];
+      }
+      return '';
+    }
+    function normalizeRow(r){
+      return {
+        id: sanitize(pick(r, ALIASES.id)),
+        alarm_name: sanitize(pick(r, ALIASES.alarm_name)),
+        fault_name: sanitize(pick(r, ALIASES.fault_name)),
+        meaning: sanitize(pick(r, ALIASES.meaning)),
+        probable_cause: sanitize(pick(r, ALIASES.probable_cause)),
+        severity: sanitize(pick(r, ALIASES.severity)),
+        event_type: sanitize(pick(r, ALIASES.event_type)),
+        clearing: sanitize(pick(r, ALIASES.clearing)),
+        ttl: sanitize(pick(r, ALIASES.ttl)),
+        product: sanitize(pick(r, ALIASES.product)),
+      };
+    }
+
+    // 打分與搜尋
+    function score(rec, q){
+      const s = q.toLowerCase().trim();
+      let sc = 0;
+      const id = sanitize(rec.id).toLowerCase();
+      const alarm = sanitize(rec.alarm_name).toLowerCase();
+      const fault = sanitize(rec.fault_name).toLowerCase();
+      const meaning = sanitize(rec.meaning).toLowerCase();
+      const cause = sanitize(rec.probable_cause).toLowerCase();
+      if (s && id === s) sc += 100;
+      if (s && id.includes(s)) sc += 60;
+      if (s && alarm.includes(s)) sc += 30;
+      if (s && fault.includes(s)) sc += 30;
+      if (s && meaning.includes(s)) sc += 20;
+      if (s && cause.includes(s)) sc += 15;
+      return sc;
+    }
+    function findByQuery(raw){
+      const q = raw.trim();
+      if (!q) return [];
+      const m = q.match(/(\d[\d\-\.]*)/);
+      let hintId = m ? m[1] : null;
+      let arr = DATA.map((r,i)=>({i,score:score(r, hintId || q)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+      if (hintId){
+        const idx = DATA.findIndex(r => sanitize(r.id).toLowerCase() === hintId.toLowerCase());
+        const hit = arr.find(x=>x.i===idx);
+        if (hit){ hit.score += 1000; arr.sort((a,b)=>b.score-a.score); }
+      }
+      return arr.slice(0, 3).map(x=>DATA[x.i]);
+    }
+
+    // 中文摘要 + 建議
+    function toChinese(rec){
+      const alarm = sanitize(rec.alarm_name);
+      const fault = sanitize(rec.fault_name);
+      const meaning = sanitize(rec.meaning);
+      const cause = sanitize(rec.probable_cause);
+      const severity = sanitize(rec.severity);
+      const evt = sanitize(rec.event_type);
+      const clearing = sanitize(rec.clearing);
+      const ttl = sanitize(rec.ttl);
+      const product = sanitize(rec.product);
+
+      const lines = [];
+      if (alarm || fault) lines.push(`告警/故障：${zhGlossary(alarm)||"—"} / ${zhGlossary(fault)||"—"}`);
+      if (meaning) lines.push(`現象：${zhGlossary(meaning)}`);
+      if (cause) lines.push(`可能原因：${zhGlossary(cause)}`);
+      if (severity) lines.push(`嚴重度：${zhGlossary(severity)}`);
+      if (evt) lines.push(`事件類型：${zhGlossary(evt)}`);
+      if (ttl) lines.push(`TTL：${zhGlossary(ttl)}`);
+      if (product) lines.push(`適用產品：${zhGlossary(product)}`);
+      if (clearing) lines.push(`建議處置：${zhGlossary(clearing)}`);
+      return lines.join("\n");
+    }
+    function advice(rec){
+      const meaning = sanitize(rec.meaning).toLowerCase();
+      const cause = sanitize(rec.probable_cause).toLowerCase();
+      const clearing = sanitize(rec.clearing);
+      const tips = [];
+      if (meaning.includes('temperature') || meaning.includes('overheat')) tips.push('檢查散熱模組與風扇運作、清潔濾網，確認機櫃環境溫度。');
+      if (meaning.includes('voltage') || cause.includes('voltage')) tips.push('量測電源電壓是否在門檻內，檢查整流器與電池。');
+      if (meaning.includes('antenna') || cause.includes('feeder') || cause.includes('ald')) tips.push('檢查天線/饋線/ALD 連接是否鬆脫或損壞。');
+      if (meaning.includes('sync') || meaning.includes('synchron')) tips.push('檢查 GPS/時鐘訊號與同步設定狀態。');
+      if (meaning.includes('link')) tips.push('檢查纜線與埠燈號，重新插拔或替換纜線測試。');
+      if (tips.length === 0 && clearing) tips.push(zhGlossary(clearing));
+      if (tips.length === 0) tips.push('依設備手冊檢查對應模組與連線狀態。');
+      return '建議：' + tips.join(' ');
+    }
+
+    function render(rec){
+      const box = document.createElement('div');
+      box.innerHTML = `<span class="tag">ID: ${sanitize(rec.id)}</span><span class="tag">Severity: ${sanitize(rec.severity)}</span><span class="tag">Type: ${sanitize(rec.event_type)}</span>`;
+      const kv = document.createElement('div');
+      kv.className = 'kv';
+      kv.innerHTML = [
+        rec.alarm_name ? `<div><b>Alarm Name：</b>${sanitize(rec.alarm_name)}</div>` : '',
+        rec.fault_name ? `<div><b>Fault Name：</b>${sanitize(rec.fault_name)}</div>` : '',
+        rec.meaning ? `<div><b>Meaning：</b>${sanitize(rec.meaning)}</div>` : '',
+        rec.probable_cause ? `<div><b>Probable Cause：</b>${sanitize(rec.probable_cause)}</div>` : '',
+        rec.clearing ? `<div><b>Clearing：</b>${sanitize(rec.clearing)}</div>` : '',
+        rec.ttl ? `<div><b>Time To Live：</b>${sanitize(rec.ttl)}</div>` : '',
+        rec.product ? `<div><b>Used In Product：</b>${sanitize(rec.product)}</div>` : '',
+      ].join('');
+      const zh = document.createElement('div');
+      zh.className = 'kv'; zh.style.whiteSpace='pre-wrap'; zh.style.marginTop='8px';
+      zh.textContent = toChinese(rec);
+      const adv = document.createElement('div');
+      adv.className = 'kv'; adv.style.marginTop = '6px';
+      adv.textContent = advice(rec);
+      box.appendChild(kv); box.appendChild(zh); box.appendChild(adv);
+      return box;
+    }
+
+    function intent(text){
+      const s = text.trim();
+      const askWhat = /(是什麼|是什麼意思|代表什麼|meaning|說明)/i.test(s);
+      const askHow = /(怎麼辦|如何處理|如何排除|怎麼處理|處置|repair|fix|clear)/i.test(s);
+      return { askWhat, askHow };
+    }
+
+    function handle(raw){
+      const {askWhat, askHow} = intent(raw);
+      const hits = findByQuery(raw);
+      if (!hits.length){
+        if (lastHit && askHow){
+          add(advice(lastHit));
+          return;
+        }
+        add('沒有符合的資料。請輸入有效的 ID（如 7115-2）或更精確的關鍵字。');
+        return;
+      }
+      const rec = hits[0];
+      lastHit = rec;
+      add(render(rec));
+    }
+
+    send.addEventListener('click', ()=>{
+      const text = q.value;
+      if (!text.trim()) return;
+      add(text, true);
+      handle(text);
+      q.value=''; q.focus();
+    });
+    q.addEventListener('keydown', (e)=>{ if (e.key==='Enter') send.click(); });
+
+    // 載入資料（防快取）＋自動欄位對應
+    (async function init(){
+      try{
+        const resp = await fetch('./alarm_fault_data.json?cb='+Date.now(), {cache:'no-store'});
+        if(!resp.ok) throw new Error('HTTP '+resp.status);
+        const raw = await resp.json();
+        DATA = raw.map(normalizeRow).filter(r => r.id !== '');
+        hint.textContent = '載入完成，共 ' + DATA.length + ' 筆。';
+        add('哈囉！我可以：\n• 查詢：輸入 ID（如 7115-2）或關鍵字\n• 說明：輸入「7115-2 是什麼？」\n• 排除：輸入「7115-2 怎麼辦？」或「那我該怎麼辦」');
+      }catch(e){
+        hint.textContent = '載入失敗：請確認 alarm_fault_data.json 與本頁在同一資料夾（大小寫需一致）。';
+        console.error('JSON 載入錯誤', e);
+      }
+    })();
+  </script>
+</body>
+</html>
