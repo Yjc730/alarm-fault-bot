@@ -94,7 +94,6 @@
       </div>
       <div class="cta">
         <button class="btn" id="start">開始使用</button>
-        <button class="btn btn-secondary" id="lite">使用舊版（簡易查詢）</button>
       </div>
       <ul class="list">
         <li>建議將頁面加入主畫面或主螢幕書籤，離線也能使用。</li>
@@ -112,7 +111,6 @@
   const LITE_PAGE = "alarm_fault_bot_minchat.html";
   const REPO_URL  = location.origin + location.pathname;
   document.getElementById("start").onclick = () => location.href = CHAT_PAGE;
-  document.getElementById("lite").onclick  = () => location.href = LITE_PAGE;
   document.getElementById("gh").onclick    = (e) => { e.preventDefault(); window.open(REPO_URL, "_blank"); };
 
   // 背景粒子
