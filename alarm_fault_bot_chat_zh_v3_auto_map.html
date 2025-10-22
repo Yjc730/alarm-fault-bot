@@ -25,6 +25,17 @@
     .kv { margin-top:6px; font-size: 13px; color:#c8d1e6; }
     .kv b { color:#9fb0d9; }
     .subtle { color:#9aa6bd; font-size:12px; }
+
+    /* ====== Compact + Toggle ====== */
+    .bubble { font-size:13px; line-height:1.45; }
+    .kv div { margin: 2px 0; }
+    .tag { font-size:11px; padding:1px 6px; }
+    .btn-more{
+      margin-top:6px; padding:4px 8px;
+      border:1px solid var(--line); background:#1a1e2a;
+      color:#b9c4db; border-radius:6px; cursor:pointer;
+    }
+    .btn-more:hover{ filter:brightness(1.08); }
   </style>
 </head>
 <body>
@@ -88,7 +99,7 @@
 
   // Excel/JSON 常見欄位別名 → 標準欄位
   const ALIASES = {
-    id: ['id','alert number (alarm-fault)','alert number','alarm id','code','alarm number','fault id'], // 加入 'fault id'
+    id: ['id','alert number (alarm-fault)','alert number','alarm id','code','alarm number','fault id'],
     alarm_name: ['alarm name','alarm name in previous release','alarm'],
     fault_name: ['fault name','fault name in previous release','fault'],
     meaning: ['meaning','meaning in previous release','description'],
@@ -104,12 +115,10 @@
   };
   function pick(obj, names){
     const keys = Object.keys(obj);
-    // 先嚴格等於（忽略大小寫）
     for(const n of names){
       const k = keys.find(k=>k.toLowerCase()===n.toLowerCase());
       if(k) return obj[k];
     }
-    // 再部分包含
     for(const n of names){
       const k = keys.find(k=>k.toLowerCase().includes(n.toLowerCase()));
       if(k) return obj[k];
@@ -136,9 +145,7 @@
 
   // 將任何形狀的 JSON → 攤平成可搜尋的列
   function flattenAny(raw){
-    if (Array.isArray(raw)) {
-      return raw.map(normalizeRow).filter(r => r.id);
-    }
+    if (Array.isArray(raw)) return raw.map(normalizeRow).filter(r => r.id);
     if (raw && typeof raw === 'object') {
       let rows = [];
       if (Array.isArray(raw.alarm_fault_map)) rows = rows.concat(raw.alarm_fault_map.map(normalizeRow));
@@ -173,11 +180,11 @@
     let hintId = m ? m[1] : null;
     let arr = DATA.map((r,i)=>({i,score:score(r, hintId || q)}))
                  .filter(x=>x.score>0)
-                 .sort((a,b)=> b.score - a.score);   // 修正排序
+                 .sort((a,b)=> b.score - a.score);
     if (hintId){
       const idx = DATA.findIndex(r => sanitize(r.id).toLowerCase() === hintId.toLowerCase());
       const hit = arr.find(x=>x.i===idx);
-      if (hit){ hit.score += 1000; arr.sort((a,b)=> b.score - a.score); } // 修正排序
+      if (hit){ hit.score += 1000; arr.sort((a,b)=> b.score - a.score); }
     }
     return arr.slice(0, 3).map(x=>DATA[x.i]);
   }
@@ -226,12 +233,31 @@
     return '建議：' + tips.join(' ');
   }
 
+  // ====== 新：可摺疊 render ======
   function render(rec){
     const box = document.createElement('div');
-    box.innerHTML =
-      `<span class="tag">ID: ${sanitize(rec.id)}</span>` +
-      `<span class="tag">Severity: ${sanitize(rec.severity)}</span>` +
-      `<span class="tag">Type: ${sanitize(rec.event_type)}</span>`;
+
+    // —— 摘要列（標題＋基本標籤＋展開按鈕）——
+    const head = document.createElement('div');
+    head.className = 'kv';
+    const title = sanitize(rec.alarm_name || rec.fault_name || '（未命名）');
+    const tags = [
+      `<span class="tag">ID: ${sanitize(rec.id)}</span>`,
+      rec.severity ? `<span class="tag">Severity: ${sanitize(rec.severity)}</span>` : '',
+      rec.event_type ? `<span class="tag">Type: ${sanitize(rec.event_type)}</span>` : ''
+    ].join('');
+    head.innerHTML = `
+      <div style="font-weight:800;margin-bottom:4px">${title}</div>
+      <div>${tags}</div>
+    `;
+    const btn = document.createElement('button');
+    btn.className = 'btn-more';
+    btn.textContent = '展開詳情 ▼';
+    head.appendChild(btn);
+
+    // —— 詳細內容（預設收起）——
+    const detail = document.createElement('div');
+    detail.style.display = 'none';
 
     const kv = document.createElement('div');
     kv.className = 'kv';
@@ -255,14 +281,30 @@
     ].join('');
 
     const zh = document.createElement('div');
-    zh.className = 'kv'; zh.style.whiteSpace='pre-wrap'; zh.style.marginTop='8px';
+    zh.className = 'kv';
+    zh.style.whiteSpace='pre-wrap';
+    zh.style.marginTop='8px';
     zh.textContent = toChinese(rec);
 
     const adv = document.createElement('div');
-    adv.className = 'kv'; adv.style.marginTop = '6px';
+    adv.className = 'kv';
+    adv.style.marginTop = '6px';
     adv.textContent = advice(rec);
 
-    box.appendChild(kv); box.appendChild(zh); box.appendChild(adv);
+    detail.appendChild(kv);
+    detail.appendChild(zh);
+    detail.appendChild(adv);
+
+    // —— 切換展開/收起 —— 
+    btn.onclick = () => {
+      const open = detail.style.display === 'block';
+      detail.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? '展開詳情 ▼' : '收起 ▲';
+    };
+
+    // —— 組裝 —— 
+    box.appendChild(head);
+    box.appendChild(detail);
     return box;
   }
 
@@ -302,7 +344,7 @@
   (async function init(){
     try{
       const CANDIDATES = [
-        'alarm_fault_final_merged.json',   // 新檔
+        'alarm_fault_final_merged.json',
         'alarm_fault_data_cleaned_v2.json',
         'alarm_fault_data_cleaned.json',
         'alarm_fault_data.json'
