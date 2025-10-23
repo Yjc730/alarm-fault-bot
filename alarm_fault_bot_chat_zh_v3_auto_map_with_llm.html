@@ -41,7 +41,11 @@
 <body>
   <div class="wrap">
     <div class="title">Alarm-Fault 對話機器人（自動欄位對應）</div>
-    <div class="desc">輸入 ID（如 <b>7115-2</b>）或自然語句（如「<i>7115-2 是什麼？</i>」「<i>該怎麼辦</i>」）。<br/>資料只來自同資料夾 JSON，離線可用。</div>
+    <div class="desc">
+      輸入 ID（如 <b>7115-2</b>）或自然語句（如「<i>7115-2 是什麼？</i>」「<i>該怎麼辦</i>」）。
+      <span class="tag">資料僅來自本地 JSON</span>
+      <span class="tag">LLM: Qwen（via OpenRouter）</span>
+    </div>
     <div class="box">
       <div id="msgs" class="msgs"></div>
       <div class="inputbar">
@@ -56,6 +60,7 @@
   </div>
 
 <script>
+  /* ===================== 基本 UI ===================== */
   const msgs = document.getElementById('msgs');
   const q = document.getElementById('q');
   const send = document.getElementById('send');
@@ -76,6 +81,12 @@
 
   function sanitize(s){ return (s ?? '').toString(); }
 
+  /* ===================== 1) API 端點可配置 ===================== */
+  const DEFAULT_API = 'https://translate-api-v2.vercel.app/api/translate';
+  const qs = new URLSearchParams(location.search);
+  const TRANSLATE_API = qs.get('api') || DEFAULT_API;
+
+  /* ===================== 辭彙字典（備援） ===================== */
   const GLOSSARY = [
     ["alarm","告警"],["fault","故障"],["warning","警告"],["critical","嚴重"],["major","重大"],["minor","次要"],
     ["cleared","已清除"],["clear","清除"],["active","啟動"],["inactive","未啟動"],
@@ -99,36 +110,62 @@
     });
     return out;
   }
-  // —— LLM 翻譯（僅英文→繁中），保留原本字典為備援 ——
+
+  /* ===================== 2) LLM 翻譯（快取 + 去重 + 自動判斷） ===================== */
   const translateCache = new Map();
-  const useLLM = () => document.getElementById('useLLM')?.checked;
+  const inflight = new Map(); // src -> Promise<string>
+  const llmBox = document.getElementById('useLLM');
+  // 勾選狀態持久化
+  llmBox.checked = localStorage.getItem('USE_LLM') === '1';
+  llmBox.addEventListener('change', ()=> {
+    localStorage.setItem('USE_LLM', llmBox.checked ? '1' : '0');
+  });
+  const useLLM = () => llmBox.checked;
+  const looksChinese = (s) => /[\u4e00-\u9fff]/.test(s || '');
 
   async function translateWithLLM(text){
     const src = (text ?? '').trim();
     if (!src) return '';
     if (translateCache.has(src)) return translateCache.get(src);
 
+    // 有中文就直接回傳（不送 LLM）
+    if (looksChinese(src)) {
+      translateCache.set(src, src);
+      return src;
+    }
+
+    // 沒開 LLM → 用字典備援
     if (!useLLM()){
       const zh = zhGlossary(src);
       translateCache.set(src, zh);
       return zh;
     }
-    try{
-      const r = await fetch('/api/translate', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ text: src })
-      });
-      if (!r.ok) throw new Error('translate api error '+r.status);
-      const { zh } = await r.json();
-      const out = (zh || '').trim() || zhGlossary(src);
-      translateCache.set(src, out);
-      return out;
-    }catch(e){
-      const zh = zhGlossary(src);
-      translateCache.set(src, zh);
-      return zh;
-    }
+
+    // 去重：相同句子同時請求只打一次
+    if (inflight.has(src)) return inflight.get(src);
+
+    const p = (async ()=>{
+      try{
+        const r = await fetch(TRANSLATE_API, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ text: src })
+        });
+        if (!r.ok) throw new Error('translate api error '+r.status);
+        const { zh } = await r.json();
+        return (zh || '').trim() || zhGlossary(src);
+      }catch(e){
+        console.warn('[translate fail]', e);
+        return zhGlossary(src);
+      }finally{
+        inflight.delete(src);
+      }
+    })();
+
+    inflight.set(src, p);
+    const out = await p;
+    translateCache.set(src, out);
+    return out;
   }
 
   async function toChineseLLM(rec){
@@ -160,8 +197,7 @@
     return lines.join("\n");
   }
 
-
-  // Excel/JSON 常見欄位別名 → 標準欄位
+  /* ===================== 資料欄位正規化 ===================== */
   const ALIASES = {
     id: ['id','alert number (alarm-fault)','alert number','alarm id','code','alarm number','fault id'],
     alarm_name: ['alarm name','alarm name in previous release','alarm'],
@@ -207,7 +243,6 @@
     };
   }
 
-  // 將任何形狀的 JSON → 攤平成可搜尋的列
   function flattenAny(raw){
     if (Array.isArray(raw)) return raw.map(normalizeRow).filter(r => r.id);
     if (raw && typeof raw === 'object') {
@@ -220,7 +255,7 @@
     return [];
   }
 
-  // 打分與搜尋
+  /* ===================== 搜尋與打分 ===================== */
   function score(rec, q){
     const s = q.toLowerCase().trim();
     let sc = 0;
@@ -253,7 +288,7 @@
     return arr.slice(0, 3).map(x=>DATA[x.i]);
   }
 
-  // 中文摘要 + 建議
+  /* ===================== 中文摘要 + 建議 ===================== */
   function toChinese(rec){
     const alarm = sanitize(rec.alarm_name);
     const fault = sanitize(rec.fault_name);
@@ -297,11 +332,10 @@
     return '建議：' + tips.join(' ');
   }
 
-  // ====== 新：可摺疊 render ======
+  // 可摺疊 render
   function render(rec){
     const box = document.createElement('div');
 
-    // —— 摘要列（標題＋基本標籤＋展開按鈕）——
     const head = document.createElement('div');
     head.className = 'kv';
     const title = sanitize(rec.alarm_name || rec.fault_name || '（未命名）');
@@ -319,18 +353,15 @@
     btn.textContent = '展開詳情 ▼';
     head.appendChild(btn);
 
-    // —— 詳細內容（預設收起）——
     const detail = document.createElement('div');
     detail.style.display = 'none';
 
     const kv = document.createElement('div');
     kv.className = 'kv';
-
     const products = sanitize(rec.product).split(/[,;]\s*/).filter(Boolean);
     const productsHtml = products.length
       ? products.map(p=>`<span class="tag">${p}</span>`).join(' ')
       : '';
-
     kv.innerHTML = [
       rec.alarm_name ? `<div><b>Alarm Name：</b>${sanitize(rec.alarm_name)}</div>` : '',
       rec.fault_name ? `<div><b>Fault Name：</b>${sanitize(rec.fault_name)}</div>` : '',
@@ -348,8 +379,8 @@
     zh.className = 'kv';
     zh.style.whiteSpace='pre-wrap';
     zh.style.marginTop='8px';
-    zh.textContent = (document.getElementById('useLLM')?.checked ? '翻譯中…' : toChinese(rec));
-    if (document.getElementById('useLLM')?.checked) { toChineseLLM(rec).then(txt=> zh.textContent = txt).catch(()=>{ zh.textContent = toChinese(rec); }); }
+    zh.textContent = (llmBox.checked ? '翻譯中…' : toChinese(rec));
+    if (llmBox.checked) { toChineseLLM(rec).then(txt=> zh.textContent = txt).catch(()=>{ zh.textContent = toChinese(rec); }); }
 
     const adv = document.createElement('div');
     adv.className = 'kv';
@@ -360,14 +391,12 @@
     detail.appendChild(zh);
     detail.appendChild(adv);
 
-    // —— 切換展開/收起 —— 
     btn.onclick = () => {
       const open = detail.style.display === 'block';
       detail.style.display = open ? 'none' : 'block';
       btn.textContent = open ? '展開詳情 ▼' : '收起 ▲';
     };
 
-    // —— 組裝 —— 
     box.appendChild(head);
     box.appendChild(detail);
     return box;
@@ -405,7 +434,7 @@
   });
   q.addEventListener('keydown', (e)=>{ if (e.key==='Enter') send.click(); });
 
-  // 載入資料（優先讀 final_merged → 回退舊檔），並顯示狀態
+  /* ===================== 載入 JSON ===================== */
   (async function init(){
     try{
       const CANDIDATES = [
