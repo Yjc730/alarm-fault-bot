@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Alarm-Fault 對話機器人（自動欄位對應）</title>
+  <meta name="color-scheme" content="dark"/>
+  <style>
+    :root { --bg:#0f1115; --panel:#161a22; --line:#252b36; --text:#e6e6e6; --muted:#a4afc4; --accent:#2e6be6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC","PingFang TC","Microsoft JhengHei",Arial,sans-serif; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+    .title { font-weight: 800; font-size: 20px; }
+    .desc { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .box { margin-top: 12px; border:1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; }
+    .msgs { height: 64vh; overflow:auto; padding: 12px; }
+    .msg { margin: 8px 0; display:flex; gap:8px; align-items:flex-start; }
+    .msg.me { justify-content: flex-end; }
+    .bubble { padding: 10px 12px; background:#11151e; border:1px solid var(--line); border-radius: 12px; max-width: 85%; white-space: pre-wrap; line-height: 1.6; }
+    .msg.me .bubble { background: var(--accent); border-color: var(--accent); color: white; }
+    .inputbar { display:flex; gap:8px; padding: 10px; border-top:1px solid var(--line); background: #121620; }
+    .inputbar input { flex:1; padding: 12px; border-radius: 10px; border:1px solid var(--line); background:#0d1119; color:var(--text); }
+    .inputbar button { padding: 12px 16px; border-radius: 10px; border:1px solid var(--accent); background: var(--accent); color:white; cursor:pointer; }
+    .tag { display:inline-block; padding:1px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:#b9c4db; margin-right:6px; }
+    .kv { margin-top:6px; font-size: 13px; color:#c8d1e6; }
+    .kv b { color:#9fb0d9; }
+    .subtle { color:#9aa6bd; font-size:12px; }
+
+    /* ====== Compact + Toggle ====== */
+    .bubble { font-size:13px; line-height:1.45; }
+    .kv div { margin: 2px 0; }
+    .tag { font-size:11px; padding:1px 6px; }
+    .btn-more{
+      margin-top:6px; padding:4px 8px;
+      border:1px solid var(--line); background:#1a1e2a;
+      color:#b9c4db; border-radius:6px; cursor:pointer;
+    }
+    .btn-more:hover{ filter:brightness(1.08); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">Alarm-Fault 對話機器人（自動欄位對應）</div>
+    <div class="desc">輸入 ID（如 <b>7115-2</b>）或自然語句（如「<i>7115-2 是什麼？</i>」「<i>該怎麼辦</i>」）。<br/>資料只來自同資料夾 JSON，離線可用。</div>
+    <div class="box">
+      <div id="msgs" class="msgs"></div>
+      <div class="inputbar">
+        <input id="q" type="text" placeholder="試試：7115-2 是什麼？ / 7115-2 要怎麼處理 / antenna fault">
+        <button id="send">送出</button>
+      </div>
+      <label class="subtle" style="display:block;margin:6px 12px 0">
+        <input id="useLLM" type="checkbox"> 啟用 LLM 翻譯（僅英文→繁中）
+      </label>
+    </div>
+    <div id="hint" class="subtle">正在載入資料…</div>
+  </div>
+
+<script>
+  const msgs = document.getElementById('msgs');
+  const q = document.getElementById('q');
+  const send = document.getElementById('send');
+  const hint = document.getElementById('hint');
+  let DATA = [];
+  let lastHit = null;
+
+  function add(content, me=false) {
+    const row = document.createElement('div');
+    row.className = 'msg' + (me ? ' me' : '');
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    if (typeof content === 'string') b.textContent = content; else b.appendChild(content);
+    row.appendChild(b);
+    msgs.appendChild(row);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function sanitize(s){ return (s ?? '').toString(); }
+
+  const GLOSSARY = [
+    ["alarm","告警"],["fault","故障"],["warning","警告"],["critical","嚴重"],["major","重大"],["minor","次要"],
+    ["cleared","已清除"],["clear","清除"],["active","啟動"],["inactive","未啟動"],
+    ["power","電源"],["voltage","電壓"],["current","電流"],["overvoltage","過電壓"],["undervoltage","欠壓"],
+    ["overcurrent","過電流"],["short circuit","短路"],["battery","電池"],["rectifier","整流器"],
+    ["temperature","溫度"],["overheat","過熱"],["fan","風扇"],["cooling","散熱"],
+    ["antenna","天線"],["feeder","饋線"],["vswr","駐波比"],["rf","射頻"],["transmitter","發射端"],["receiver","接收端"],
+    ["uplink","上行"],["downlink","下行"],["baseband","基頻"],["bb","基頻"],["cabinet","機櫃"],
+    ["synchronization","同步"],["gps","GPS"],["clock","時鐘"],["pll","鎖相迴路"],
+    ["module","模組"],["board","板卡"],["unit","單元"],["port","埠"],["link down","鏈路中斷"],["link","鏈路"],
+    ["software","軟體"],["firmware","韌體"],["hardware","硬體"],["configuration","設定"],["timeout","逾時"],
+    ["restart","重啟"],["reboot","重新啟動"],["failure","失效"],["degraded","效能降低"],["maintenance","維護"],
+    ["threshold","門檻"],["interference","干擾"],["jam","阻塞"],["congestion","壅塞"],
+    ["site","站點"],["node","節點"],["sector","扇區"],["cell","小區"]
+  ];
+  function zhGlossary(text){
+    let out = sanitize(text);
+    GLOSSARY.forEach(([en, zh]) => {
+      const re = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      out = out.replace(re, zh);
+    });
+    return out;
+  }
+  // —— LLM 翻譯（僅英文→繁中），保留原本字典為備援 ——
+  const translateCache = new Map();
+  const useLLM = () => document.getElementById('useLLM')?.checked;
+
+  async function translateWithLLM(text){
+    const src = (text ?? '').trim();
+    if (!src) return '';
+    if (translateCache.has(src)) return translateCache.get(src);
+
+    if (!useLLM()){
+      const zh = zhGlossary(src);
+      translateCache.set(src, zh);
+      return zh;
+    }
+    try{
+      const r = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ text: src })
+      });
+      if (!r.ok) throw new Error('translate api error '+r.status);
+      const { zh } = await r.json();
+      const out = (zh || '').trim() || zhGlossary(src);
+      translateCache.set(src, out);
+      return out;
+    }catch(e){
+      const zh = zhGlossary(src);
+      translateCache.set(src, zh);
+      return zh;
+    }
+  }
+
+  async function toChineseLLM(rec){
+    const alarm = sanitize(rec.alarm_name);
+    const fault = sanitize(rec.fault_name);
+    const meaning = await translateWithLLM(rec.meaning);
+    const cause = await translateWithLLM(rec.probable_cause);
+    const severity = zhGlossary(rec.severity);
+    const evt = zhGlossary(rec.event_type);
+    const clearing = await translateWithLLM(rec.clearing);
+    const ttl = zhGlossary(rec.ttl);
+    const product = zhGlossary(rec.product);
+    const source = zhGlossary(rec.source);
+    const effect = await translateWithLLM(rec.effect);
+    const instructions = await translateWithLLM(rec.instructions);
+
+    const lines = [];
+    if (alarm || fault) lines.push(`告警/故障：${zhGlossary(alarm)||"—"} / ${zhGlossary(fault)||"—"}`);
+    if (meaning) lines.push(`現象：${meaning}`);
+    if (cause) lines.push(`可能原因：${cause}`);
+    if (severity) lines.push(`嚴重度：${severity}`);
+    if (evt) lines.push(`事件類型：${evt}`);
+    if (ttl) lines.push(`TTL：${ttl}`);
+    if (product) lines.push(`適用產品：${product}`);
+    if (source) lines.push(`來源：${source}`);
+    if (effect) lines.push(`影響：${effect}`);
+    if (instructions) lines.push(`處置指示：${instructions}`);
+    if (clearing) lines.push(`建議處置：${clearing}`);
+    return lines.join("\n");
+  }
+
+
+  // Excel/JSON 常見欄位別名 → 標準欄位
+  const ALIASES = {
+    id: ['id','alert number (alarm-fault)','alert number','alarm id','code','alarm number','fault id'],
+    alarm_name: ['alarm name','alarm name in previous release','alarm'],
+    fault_name: ['fault name','fault name in previous release','fault'],
+    meaning: ['meaning','meaning in previous release','description'],
+    probable_cause: ['probable cause','probable cause in previous release','cause'],
+    severity: ['default severity','severity','alarm severity information'],
+    event_type: ['event type','event type in previous release','type'],
+    clearing: ['clearing','clearing in previous release','clear action','how to clear'],
+    ttl: ['time to live','time to live in previous release','ttl'],
+    product: ['used in product','used in product in previous release','product'],
+    source: ['source'],
+    effect: ['effect'],
+    instructions: ['instructions'],
+  };
+  function pick(obj, names){
+    const keys = Object.keys(obj);
+    for(const n of names){
+      const k = keys.find(k=>k.toLowerCase()===n.toLowerCase());
+      if(k) return obj[k];
+    }
+    for(const n of names){
+      const k = keys.find(k=>k.toLowerCase().includes(n.toLowerCase()));
+      if(k) return obj[k];
+    }
+    return '';
+  }
+  function normalizeRow(r){
+    return {
+      id: sanitize(pick(r, ALIASES.id)),
+      alarm_name: sanitize(pick(r, ALIASES.alarm_name)),
+      fault_name: sanitize(pick(r, ALIASES.fault_name)),
+      meaning: sanitize(pick(r, ALIASES.meaning)),
+      probable_cause: sanitize(pick(r, ALIASES.probable_cause)),
+      severity: sanitize(pick(r, ALIASES.severity)),
+      event_type: sanitize(pick(r, ALIASES.event_type)),
+      clearing: sanitize(pick(r, ALIASES.clearing)),
+      ttl: sanitize(pick(r, ALIASES.ttl)),
+      product: sanitize(pick(r, ALIASES.product)),
+      source: sanitize(pick(r, ALIASES.source)),
+      effect: sanitize(pick(r, ALIASES.effect)),
+      instructions: sanitize(pick(r, ALIASES.instructions)),
+    };
+  }
+
+  // 將任何形狀的 JSON → 攤平成可搜尋的列
+  function flattenAny(raw){
+    if (Array.isArray(raw)) return raw.map(normalizeRow).filter(r => r.id);
+    if (raw && typeof raw === 'object') {
+      let rows = [];
+      if (Array.isArray(raw.alarm_fault_map)) rows = rows.concat(raw.alarm_fault_map.map(normalizeRow));
+      if (Array.isArray(raw.alarm_list))      rows = rows.concat(raw.alarm_list.map(normalizeRow));
+      if (Array.isArray(raw.fault_list))      rows = rows.concat(raw.fault_list.map(normalizeRow));
+      return rows.filter(r => r.id);
+    }
+    return [];
+  }
+
+  // 打分與搜尋
+  function score(rec, q){
+    const s = q.toLowerCase().trim();
+    let sc = 0;
+    const id = sanitize(rec.id).toLowerCase();
+    const alarm = sanitize(rec.alarm_name).toLowerCase();
+    const fault = sanitize(rec.fault_name).toLowerCase();
+    const meaning = sanitize(rec.meaning).toLowerCase();
+    const cause = sanitize(rec.probable_cause).toLowerCase();
+    if (s && id === s) sc += 100;
+    if (s && id.includes(s)) sc += 60;
+    if (s && alarm.includes(s)) sc += 30;
+    if (s && fault.includes(s)) sc += 30;
+    if (s && meaning.includes(s)) sc += 20;
+    if (s && cause.includes(s)) sc += 15;
+    return sc;
+  }
+  function findByQuery(raw){
+    const q = raw.trim();
+    if (!q) return [];
+    const m = q.match(/(\d[\d\-\.]*)/);
+    let hintId = m ? m[1] : null;
+    let arr = DATA.map((r,i)=>({i,score:score(r, hintId || q)}))
+                 .filter(x=>x.score>0)
+                 .sort((a,b)=> b.score - a.score);
+    if (hintId){
+      const idx = DATA.findIndex(r => sanitize(r.id).toLowerCase() === hintId.toLowerCase());
+      const hit = arr.find(x=>x.i===idx);
+      if (hit){ hit.score += 1000; arr.sort((a,b)=> b.score - a.score); }
+    }
+    return arr.slice(0, 3).map(x=>DATA[x.i]);
+  }
+
+  // 中文摘要 + 建議
+  function toChinese(rec){
+    const alarm = sanitize(rec.alarm_name);
+    const fault = sanitize(rec.fault_name);
+    const meaning = sanitize(rec.meaning);
+    const cause = sanitize(rec.probable_cause);
+    const severity = sanitize(rec.severity);
+    const evt = sanitize(rec.event_type);
+    const clearing = sanitize(rec.clearing);
+    const ttl = sanitize(rec.ttl);
+    const product = sanitize(rec.product);
+    const source = sanitize(rec.source);
+    const effect = sanitize(rec.effect);
+    const instructions = sanitize(rec.instructions);
+
+    const lines = [];
+    if (alarm || fault) lines.push(`告警/故障：${zhGlossary(alarm)||"—"} / ${zhGlossary(fault)||"—"}`);
+    if (meaning) lines.push(`現象：${zhGlossary(meaning)}`);
+    if (cause) lines.push(`可能原因：${zhGlossary(cause)}`);
+    if (severity) lines.push(`嚴重度：${zhGlossary(severity)}`);
+    if (evt) lines.push(`事件類型：${zhGlossary(evt)}`);
+    if (ttl) lines.push(`TTL：${zhGlossary(ttl)}`);
+    if (product) lines.push(`適用產品：${zhGlossary(product)}`);
+    if (source) lines.push(`來源：${zhGlossary(source)}`);
+    if (effect) lines.push(`影響：${zhGlossary(effect)}`);
+    if (instructions) lines.push(`處置指示：${zhGlossary(instructions)}`);
+    if (clearing) lines.push(`建議處置：${zhGlossary(clearing)}`);
+    return lines.join("\n");
+  }
+  function advice(rec){
+    const meaning = sanitize(rec.meaning).toLowerCase();
+    const cause = sanitize(rec.probable_cause).toLowerCase();
+    const clearing = sanitize(rec.clearing);
+    const tips = [];
+    if (meaning.includes('temperature') || meaning.includes('overheat')) tips.push('檢查散熱模組與風扇運作、清潔濾網，確認機櫃環境溫度。');
+    if (meaning.includes('voltage') || cause.includes('voltage')) tips.push('量測電源電壓是否在門檻內，檢查整流器與電池。');
+    if (meaning.includes('antenna') || cause.includes('feeder') || cause.includes('ald')) tips.push('檢查天線/饋線/ALD 連接是否鬆脫或損壞。');
+    if (meaning.includes('sync') || meaning.includes('synchron')) tips.push('檢查 GPS/時鐘訊號與同步設定狀態。');
+    if (meaning.includes('link')) tips.push('檢查纜線與埠燈號，重新插拔或替換纜線測試。');
+    if (tips.length === 0 && clearing) tips.push(zhGlossary(clearing));
+    if (tips.length === 0) tips.push('依設備手冊檢查對應模組與連線狀態。');
+    return '建議：' + tips.join(' ');
+  }
+
+  // ====== 新：可摺疊 render ======
+  function render(rec){
+    const box = document.createElement('div');
+
+    // —— 摘要列（標題＋基本標籤＋展開按鈕）——
+    const head = document.createElement('div');
+    head.className = 'kv';
+    const title = sanitize(rec.alarm_name || rec.fault_name || '（未命名）');
+    const tags = [
+      `<span class="tag">ID: ${sanitize(rec.id)}</span>`,
+      rec.severity ? `<span class="tag">Severity: ${sanitize(rec.severity)}</span>` : '',
+      rec.event_type ? `<span class="tag">Type: ${sanitize(rec.event_type)}</span>` : ''
+    ].join('');
+    head.innerHTML = `
+      <div style="font-weight:800;margin-bottom:4px">${title}</div>
+      <div>${tags}</div>
+    `;
+    const btn = document.createElement('button');
+    btn.className = 'btn-more';
+    btn.textContent = '展開詳情 ▼';
+    head.appendChild(btn);
+
+    // —— 詳細內容（預設收起）——
+    const detail = document.createElement('div');
+    detail.style.display = 'none';
+
+    const kv = document.createElement('div');
+    kv.className = 'kv';
+
+    const products = sanitize(rec.product).split(/[,;]\s*/).filter(Boolean);
+    const productsHtml = products.length
+      ? products.map(p=>`<span class="tag">${p}</span>`).join(' ')
+      : '';
+
+    kv.innerHTML = [
+      rec.alarm_name ? `<div><b>Alarm Name：</b>${sanitize(rec.alarm_name)}</div>` : '',
+      rec.fault_name ? `<div><b>Fault Name：</b>${sanitize(rec.fault_name)}</div>` : '',
+      rec.meaning ? `<div><b>Meaning：</b>${sanitize(rec.meaning)}</div>` : '',
+      rec.probable_cause ? `<div><b>Probable Cause：</b>${sanitize(rec.probable_cause)}</div>` : '',
+      rec.source ? `<div><b>Source：</b>${sanitize(rec.source)}</div>` : '',
+      rec.effect ? `<div><b>Effect：</b>${sanitize(rec.effect)}</div>` : '',
+      rec.instructions ? `<div><b>Instructions：</b>${sanitize(rec.instructions)}</div>` : '',
+      rec.clearing ? `<div><b>Clearing：</b>${sanitize(rec.clearing)}</div>` : '',
+      rec.ttl ? `<div><b>Time To Live：</b>${sanitize(rec.ttl)}</div>` : '',
+      productsHtml ? `<div><b>Used In Product：</b>${productsHtml}</div>` : '',
+    ].join('');
+
+    const zh = document.createElement('div');
+    zh.className = 'kv';
+    zh.style.whiteSpace='pre-wrap';
+    zh.style.marginTop='8px';
+    zh.textContent = (document.getElementById('useLLM')?.checked ? '翻譯中…' : toChinese(rec));
+    if (document.getElementById('useLLM')?.checked) { toChineseLLM(rec).then(txt=> zh.textContent = txt).catch(()=>{ zh.textContent = toChinese(rec); }); }
+
+    const adv = document.createElement('div');
+    adv.className = 'kv';
+    adv.style.marginTop = '6px';
+    adv.textContent = advice(rec);
+
+    detail.appendChild(kv);
+    detail.appendChild(zh);
+    detail.appendChild(adv);
+
+    // —— 切換展開/收起 —— 
+    btn.onclick = () => {
+      const open = detail.style.display === 'block';
+      detail.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? '展開詳情 ▼' : '收起 ▲';
+    };
+
+    // —— 組裝 —— 
+    box.appendChild(head);
+    box.appendChild(detail);
+    return box;
+  }
+
+  function intent(text){
+    const s = text.trim();
+    const askWhat = /(是什麼|是什麼意思|代表什麼|meaning|說明)/i.test(s);
+    const askHow = /(怎麼辦|如何處理|如何排除|怎麼處理|處置|repair|fix|clear)/i.test(s);
+    return { askWhat, askHow };
+  }
+
+  function handle(raw){
+    const {askWhat, askHow} = intent(raw);
+    const hits = findByQuery(raw);
+    if (!hits.length){
+      if (lastHit && askHow){
+        add(advice(lastHit));
+        return;
+      }
+      add('沒有符合的資料。請輸入有效的 ID（如 7115-2）或更精確的關鍵字。');
+      return;
+    }
+    const rec = hits[0];
+    lastHit = rec;
+    add(render(rec));
+  }
+
+  send.addEventListener('click', ()=>{
+    const text = q.value;
+    if (!text.trim()) return;
+    add(text, true);
+    handle(text);
+    q.value=''; q.focus();
+  });
+  q.addEventListener('keydown', (e)=>{ if (e.key==='Enter') send.click(); });
+
+  // 載入資料（優先讀 final_merged → 回退舊檔），並顯示狀態
+  (async function init(){
+    try{
+      const CANDIDATES = [
+        'alarm_fault_final_merged.json',
+        'alarm_fault_data_cleaned_v2.json',
+        'alarm_fault_data_cleaned.json',
+        'alarm_fault_data.json'
+      ];
+      let loaded = null, srcName = null, lastErr = null;
+      for (const name of CANDIDATES) {
+        try {
+          const r = await fetch('./'+name+'?cb='+Date.now(), { cache:'no-store' });
+          if (r.ok) { loaded = await r.json(); srcName = name; break; }
+        } catch(e){ lastErr = e; }
+      }
+      if (!loaded) throw lastErr || new Error('找不到可用 JSON');
+
+      const rows = flattenAny(loaded);
+      if (!rows.length) throw new Error('JSON 已載入，但沒有可用資料列');
+
+      DATA = rows;
+      hint.textContent = `已載入 ${srcName}，共 ${DATA.length} 筆可查。`;
+      add('哈囉！我可以：\n• 查詢：輸入 ID（如 7115-2）或關鍵字\n• 說明：輸入「7115-2 是什麼？」\n• 排除：輸入「7115-2 怎麼辦？」或「那我該怎麼辦」');
+    }catch(e){
+      hint.textContent = '載入失敗：請確認 JSON 與本頁在同一資料夾、檔名大小寫一致，且以 http(s) 方式開啟。';
+      console.error('JSON 載入錯誤', e);
+    }
+  })();
+</script>
+</body>
+</html>
