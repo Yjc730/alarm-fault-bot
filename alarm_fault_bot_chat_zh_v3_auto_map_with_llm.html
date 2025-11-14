@@ -183,7 +183,6 @@
     const instructions = await translateWithLLM(rec.instructions);
 
     const lines = [];
-    const lines = [];
   // 這裡就不用再 zhGlossary，一律用上面翻好的中文
     if (alarm || fault) lines.push(`告警/故障：${alarm || "—"} / ${fault || "—"}`);
     if (meaning) lines.push(`現象：${meaning}`);
