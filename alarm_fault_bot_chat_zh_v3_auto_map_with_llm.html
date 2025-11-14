@@ -111,6 +111,24 @@
     return out;
   }
 
+  // 片語優先的翻譯（不用 LLM 時也比較完整）
+  const PHRASE_GLOSSARY = [
+    ["BASE STATION/UNIT AUTONOMOUS RESET NOTIFICATION", "基地台/單元 自動重置通知"],
+    ["AUTONOMOUS RESET NOTIFICATION", "自動重置通知"],
+    ["RESET NOTIFICATION", "重置通知"],
+    ["Unit SW download failed", "單元軟體下載失敗"],
+    ["SW download failed", "軟體下載失敗"],
+    ["download failed", "下載失敗"]
+  ];
+  function zhFull(text){
+    let out = sanitize(text);
+    PHRASE_GLOSSARY.forEach(([en, zh]) => {
+      const re = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      out = out.replace(re, zh);
+    });
+    return zhGlossary(out);
+  }
+
   /* ===================== 2) LLM 翻譯（快取 + 去重 + 自動判斷） ===================== */
   const translateCache = new Map();
   const inflight = new Map(); // src -> Promise<string>
@@ -136,7 +154,7 @@
 
     // 沒開 LLM → 用字典備援
     if (!useLLM()){
-      const zh = zhGlossary(src);
+      const zh = zhFull(src);
       translateCache.set(src, zh);
       return zh;
     }
@@ -153,10 +171,10 @@
         });
         if (!r.ok) throw new Error('translate api error '+r.status);
         const { zh } = await r.json();
-        return (zh || '').trim() || zhGlossary(src);
+        return (zh || '').trim() || zhFull(src);
       }catch(e){
         console.warn('[translate fail]', e);
-        return zhGlossary(src);
+        return zhFull(src);
       }finally{
         inflight.delete(src);
       }
@@ -170,33 +188,31 @@
 
   async function toChineseLLM(rec){
     const alarm = await translateWithLLM(rec.alarm_name);
-    const fault = await translateWithLLM(rec.fault_name);
+    const fault  = await translateWithLLM(rec.fault_name);
     const meaning = await translateWithLLM(rec.meaning);
-    const cause = await translateWithLLM(rec.probable_cause);
-    const severity = zhGlossary(rec.severity);
-    const evt = zhGlossary(rec.event_type);
+    const cause   = await translateWithLLM(rec.probable_cause);
+    const severity = zhFull(rec.severity);
+    const evt      = zhFull(rec.event_type);
     const clearing = await translateWithLLM(rec.clearing);
-    const ttl = zhGlossary(rec.ttl);
-    const product = zhGlossary(rec.product);
-    const source = zhGlossary(rec.source);
-    const effect = await translateWithLLM(rec.effect);
+    const ttl      = zhFull(rec.ttl);
+    const product  = zhFull(rec.product);
+    const source   = zhFull(rec.source);
+    const effect   = await translateWithLLM(rec.effect);
     const instructions = await translateWithLLM(rec.instructions);
 
     const lines = [];
-  // 這裡就不用再 zhGlossary，一律用上面翻好的中文
     if (alarm || fault) lines.push(`告警/故障：${alarm || "—"} / ${fault || "—"}`);
-    if (meaning) lines.push(`現象：${meaning}`);
-    if (cause) lines.push(`可能原因：${cause}`);
-    if (severity) lines.push(`嚴重度：${severity}`);
-    if (evt) lines.push(`事件類型：${evt}`);
-    if (ttl) lines.push(`TTL：${ttl}`);
-    if (product) lines.push(`適用產品：${product}`);
-    if (source) lines.push(`來源：${source}`);
-    if (effect) lines.push(`影響：${effect}`);
+    if (meaning)   lines.push(`現象：${meaning}`);
+    if (cause)     lines.push(`可能原因：${cause}`);
+    if (severity)  lines.push(`嚴重度：${severity}`);
+    if (evt)       lines.push(`事件類型：${evt}`);
+    if (ttl)       lines.push(`TTL：${ttl}`);
+    if (product)   lines.push(`適用產品：${product}`);
+    if (source)    lines.push(`來源：${source}`);
+    if (effect)    lines.push(`影響：${effect}`);
     if (instructions) lines.push(`處置指示：${instructions}`);
-    if (clearing) lines.push(`建議處置：${clearing}`);
+    if (clearing)  lines.push(`建議處置：${clearing}`);
     return lines.join("\n");
-}
   }
 
   /* ===================== 資料欄位正規化 ===================== */
@@ -213,7 +229,7 @@
     product: ['used in product','used in product in previous release','product'],
     source: ['source'],
     effect: ['effect'],
-    instructions: ['instructions'],
+    instructions: ['instructions']
   };
   function pick(obj, names){
     const keys = Object.keys(obj);
@@ -241,7 +257,7 @@
       product: sanitize(pick(r, ALIASES.product)),
       source: sanitize(pick(r, ALIASES.source)),
       effect: sanitize(pick(r, ALIASES.effect)),
-      instructions: sanitize(pick(r, ALIASES.instructions)),
+      instructions: sanitize(pick(r, ALIASES.instructions))
     };
   }
 
@@ -306,19 +322,20 @@
     const instructions = sanitize(rec.instructions);
 
     const lines = [];
-    if (alarm || fault) lines.push(`告警/故障：${zhGlossary(alarm)||"—"} / ${zhGlossary(fault)||"—"}`);
-    if (meaning) lines.push(`現象：${zhGlossary(meaning)}`);
-    if (cause) lines.push(`可能原因：${zhGlossary(cause)}`);
-    if (severity) lines.push(`嚴重度：${zhGlossary(severity)}`);
-    if (evt) lines.push(`事件類型：${zhGlossary(evt)}`);
-    if (ttl) lines.push(`TTL：${zhGlossary(ttl)}`);
-    if (product) lines.push(`適用產品：${zhGlossary(product)}`);
-    if (source) lines.push(`來源：${zhGlossary(source)}`);
-    if (effect) lines.push(`影響：${zhGlossary(effect)}`);
-    if (instructions) lines.push(`處置指示：${zhGlossary(instructions)}`);
-    if (clearing) lines.push(`建議處置：${zhGlossary(clearing)}`);
+    if (alarm || fault) lines.push(`告警/故障：${zhFull(alarm)||"—"} / ${zhFull(fault)||"—"}`);
+    if (meaning) lines.push(`現象：${zhFull(meaning)}`);
+    if (cause) lines.push(`可能原因：${zhFull(cause)}`);
+    if (severity) lines.push(`嚴重度：${zhFull(severity)}`);
+    if (evt) lines.push(`事件類型：${zhFull(evt)}`);
+    if (ttl) lines.push(`TTL：${zhFull(ttl)}`);
+    if (product) lines.push(`適用產品：${zhFull(product)}`);
+    if (source) lines.push(`來源：${zhFull(source)}`);
+    if (effect) lines.push(`影響：${zhFull(effect)}`);
+    if (instructions) lines.push(`處置指示：${zhFull(instructions)}`);
+    if (clearing) lines.push(`建議處置：${zhFull(clearing)}`);
     return lines.join("\n");
   }
+
   function advice(rec){
     const meaning = sanitize(rec.meaning).toLowerCase();
     const cause = sanitize(rec.probable_cause).toLowerCase();
@@ -329,7 +346,7 @@
     if (meaning.includes('antenna') || cause.includes('feeder') || cause.includes('ald')) tips.push('檢查天線/饋線/ALD 連接是否鬆脫或損壞。');
     if (meaning.includes('sync') || meaning.includes('synchron')) tips.push('檢查 GPS/時鐘訊號與同步設定狀態。');
     if (meaning.includes('link')) tips.push('檢查纜線與埠燈號，重新插拔或替換纜線測試。');
-    if (tips.length === 0 && clearing) tips.push(zhGlossary(clearing));
+    if (tips.length === 0 && clearing) tips.push(zhFull(clearing));
     if (tips.length === 0) tips.push('依設備手冊檢查對應模組與連線狀態。');
     return '建議：' + tips.join(' ');
   }
@@ -374,7 +391,7 @@
       rec.instructions ? `<div><b>Instructions：</b>${sanitize(rec.instructions)}</div>` : '',
       rec.clearing ? `<div><b>Clearing：</b>${sanitize(rec.clearing)}</div>` : '',
       rec.ttl ? `<div><b>Time To Live：</b>${sanitize(rec.ttl)}</div>` : '',
-      productsHtml ? `<div><b>Used In Product：</b>${productsHtml}</div>` : '',
+      productsHtml ? `<div><b>Used In Product：</b>${productsHtml}</div>` : ''
     ].join('');
 
     const zh = document.createElement('div');
@@ -382,7 +399,11 @@
     zh.style.whiteSpace='pre-wrap';
     zh.style.marginTop='8px';
     zh.textContent = (llmBox.checked ? '翻譯中…' : toChinese(rec));
-    if (llmBox.checked) { toChineseLLM(rec).then(txt=> zh.textContent = txt).catch(()=>{ zh.textContent = toChinese(rec); }); }
+    if (llmBox.checked) {
+      toChineseLLM(rec)
+        .then(txt => { zh.textContent = txt; })
+        .catch(() => { zh.textContent = toChinese(rec); });
+    }
 
     const adv = document.createElement('div');
     adv.className = 'kv';
