@@ -121,12 +121,13 @@
 
 <script>
 /* ========================================================
-      基礎 UI
+      UI 基礎
 ======================================================== */
 const msgs = document.getElementById('msgs');
 const q = document.getElementById('q');
 const send = document.getElementById('send');
 const hint = document.getElementById('hint');
+
 let DATA = [];
 let lastHit = null;
 
@@ -143,8 +144,9 @@ function add(content, me=false){
 }
 
 function sanitize(s){ return (s ?? '').toString(); }
+
 /* ========================================================
-      修正 ❶：避免 BBMOD → 基頻MOD
+      字典翻譯（避免 BBMOD → 基頻MOD）
 ======================================================== */
 const GLOSSARY = [
   ["alarm","告警"],["fault","故障"],["warning","警告"],["critical","嚴重"],
@@ -156,29 +158,29 @@ const GLOSSARY = [
   ["fan","風扇"],["cooling","散熱"],["antenna","天線"],["feeder","饋線"],
   ["vswr","駐波比"],["rf","射頻"],["transmitter","發射端"],
   ["receiver","接收端"],["uplink","上行"],["downlink","下行"],
-  ["baseband","基頻"],   /* ★ remove ["bb"] 避免 BBMOD 被翻掉 */
+  ["baseband","基頻"], 
   ["cabinet","機櫃"],["synchronization","同步"],["gps","GPS"],
   ["clock","時鐘"],["pll","鎖相迴路"],["module","模組"],["board","板卡"],
   ["unit","單元"],["port","埠"],["link down","鏈路中斷"],["link","鏈路"],
   ["software","軟體"],["firmware","韌體"],["hardware","硬體"],
   ["configuration","設定"],["timeout","逾時"],["restart","重啟"],
   ["reboot","重新啟動"],["failure","失效"],["degraded","效能降低"],
-  ["maintenance","維護"],["threshold","門檻"],["interference","干擾"],
+  ["maintenance","維護"],["threshold","門槛"],["interference","干擾"],
   ["jam","阻塞"],["congestion","壅塞"],["site","站點"],["node","節點"],
   ["sector","扇區"],["cell","小區"]
 ];
 
-function zhGlossary(t){
-  let out = sanitize(t);
+function zhGlossary(text){
+  let out = sanitize(text);
   for(const [en, zh] of GLOSSARY){
-    const re = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+    const re = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
     out = out.replace(re, zh);
   }
   return out;
 }
 
 /* ========================================================
-      修正 ❷：白名單保護
+      白名單保護（避免技術詞被翻譯）
 ======================================================== */
 const NO_TRANSLATE = ["SMOD","BBMOD","MOD","BTS","SBTS","FDD","TDD","ALD"];
 
@@ -198,11 +200,12 @@ function restoreWords(t){
 }
 
 /* ========================================================
-      LLM 翻譯
+      LLM 翻譯流程
 ======================================================== */
 const translateCache = new Map();
 const inflight = new Map();
 const llmBox = document.getElementById("useLLM");
+
 llmBox.checked = localStorage.getItem("USE_LLM")==="1";
 llmBox.onchange = ()=> localStorage.setItem("USE_LLM", llmBox.checked?"1":"0");
 
@@ -218,20 +221,17 @@ async function translateWithLLM(text){
   if (translateCache.has(protectedSrc))
     return restoreWords(translateCache.get(protectedSrc));
 
-  // 若是中文，就不翻譯
   if (/[\u4e00-\u9fff]/.test(src)){
     translateCache.set(protectedSrc, protectedSrc);
     return src;
   }
 
-  // 若沒啟用 LLM，走字典
   if (!llmBox.checked){
-    const zh = zhGlossary(src);
-    translateCache.set(protectedSrc, zh);
-    return zh;
+    const r = zhGlossary(src);
+    translateCache.set(protectedSrc, r);
+    return r;
   }
 
-  // LLM API 呼叫
   if (inflight.has(protectedSrc))
     return inflight.get(protectedSrc);
 
@@ -261,24 +261,24 @@ async function translateWithLLM(text){
 }
 
 /* ========================================================
-      LLM 中文段落（全文翻譯區）
+      中文 LLM 段落
 ======================================================== */
 async function toChineseLLM(rec){
+  const out = [];
+
   const alarm = await translateWithLLM(rec.alarm_name);
   const fault = await translateWithLLM(rec.fault_name);
   const meaning = await translateWithLLM(rec.meaning);
   const cause = await translateWithLLM(rec.probable_cause);
   const severity = zhGlossary(rec.severity);
   const evt = zhGlossary(rec.event_type);
-  const clearing = await translateWithLLM(rec.clearing);
-  const ttl = zhGlossary(rec.ttl);
   const product = zhGlossary(rec.product);
   const source = zhGlossary(rec.source);
-
   const effect = await translateWithLLM(rec.effect);
   const instructions = await translateWithLLM(rec.instructions);
+  const clearing = await translateWithLLM(rec.clearing);
+  const ttl = zhGlossary(rec.ttl);
 
-  const out = [];
   if (alarm||fault) out.push(`告警/故障：${alarm} / ${fault}`);
   if (meaning) out.push(`現象：${meaning}`);
   if (cause) out.push(`可能原因：${cause}`);
@@ -295,20 +295,20 @@ async function toChineseLLM(rec){
 }
 
 /* ========================================================
-      Source 單行
+      JSON 資料欄位 normalize（含 Source 單行）
 ======================================================== */
-function normalizeRow(r){
-  const pick = (obj, keys)=>{
-    const k = Object.keys(obj);
-    for(const key of keys){
-      const hit = k.find(x=>x.toLowerCase()===key.toLowerCase());
-      if (hit) return obj[hit];
-    }
-    return "";
-  };
+function pick(obj, keys){
+  const K = Object.keys(obj);
+  for(const key of keys){
+    let hit = K.find(k=>k.toLowerCase()===key.toLowerCase());
+    if (hit) return obj[hit];
+  }
+  return "";
+}
 
+function normalizeRow(r){
   return {
-    id: sanitize(pick(r,["alert number (alarm-fault)","id"])),
+    id: sanitize(pick(r,["id","alert number (alarm-fault)"])),
     alarm_name: sanitize(pick(r,["alarm name"])),
     fault_name: sanitize(pick(r,["fault name"])),
     meaning: sanitize(pick(r,["meaning"])),
@@ -325,49 +325,58 @@ function normalizeRow(r){
 }
 
 /* ========================================================
-      中文摘要區（非 LLM）
+      flattenAny（支援 map/alarm/fault）
 ======================================================== */
-async function toChinese(rec){
-  const o = [];
+function flattenAny(raw){
+  if (Array.isArray(raw)) return raw.map(normalizeRow);
 
-  if (rec.alarm_name||rec.fault_name)
-    o.push(`告警/故障：${zhGlossary(rec.alarm_name)} / ${zhGlossary(rec.fault_name)}`);
-
-  if (rec.meaning) o.push(`現象：${zhGlossary(rec.meaning)}`);
-  if (rec.probable_cause) o.push(`可能原因：${zhGlossary(rec.probable_cause)}`);
-  if (rec.severity) o.push(`嚴重度：${zhGlossary(rec.severity)}`);
-  if (rec.event_type) o.push(`事件類型：${zhGlossary(rec.event_type)}`);
-  if (rec.ttl) o.push(`TTL：${zhGlossary(rec.ttl)}`);
-  if (rec.product) o.push(`適用產品：${zhGlossory(rec.product)}`);
-  if (rec.source) o.push(`來源：${zhGlossary(rec.source)}`);
-
-  // ★ Effect 也翻成中文（字典）
-  if (rec.effect){
-    if (llmBox.checked){
-      o.push(`影響：${await translateWithLLM(rec.effect)}`);
-    }else{
-      o.push(`影響：${zhGlossary(rec.effect)}`);
-    }
-  }
-
-  if (rec.instructions) o.push(`處置指示：${zhGlossary(rec.instructions)}`);
-  if (rec.clearing) o.push(`建議處置：${zhGlossory(rec.clearing)}`);
-
-  return o.join("\n");
+  let out = [];
+  if (Array.isArray(raw.alarm_fault_map)) out = out.concat(raw.alarm_fault_map.map(normalizeRow));
+  if (Array.isArray(raw.alarm_list)) out = out.concat(raw.alarm_list.map(normalizeRow));
+  if (Array.isArray(raw.fault_list)) out = out.concat(raw.fault_list.map(normalizeRow));
+  return out;
 }
 
 /* ========================================================
-      UI renderer（英文區保持英文、中翻區顯示中文）
+      中文摘要（非 LLM）
+======================================================== */
+async function toChinese(rec){
+  const out = [];
+  if (rec.alarm_name||rec.fault_name)
+    out.push(`告警/故障：${zhGlossary(rec.alarm_name)} / ${zhGlossary(rec.fault_name)}`);
+
+  if (rec.meaning) out.push(`現象：${zhGlossary(rec.meaning)}`);
+  if (rec.probable_cause) out.push(`可能原因：${zhGlossary(rec.probable_cause)}`);
+  if (rec.severity) out.push(`嚴重度：${zhGlossary(rec.severity)}`);
+  if (rec.event_type) out.push(`事件類型：${zhGlossary(rec.event_type)}`);
+  if (rec.ttl) out.push(`TTL：${zhGlossary(rec.ttl)}`);
+  if (rec.product) out.push(`適用產品：${zhGlossary(rec.product)}`);
+  if (rec.source) out.push(`來源：${zhGlossary(rec.source)}`);
+
+  if (rec.effect){
+    if (llmBox.checked)
+      out.push(`影響：${await translateWithLLM(rec.effect)}`);
+    else
+      out.push(`影響：${zhGlossary(rec.effect)}`);
+  }
+
+  if (rec.instructions) out.push(`處置指示：${zhGlossary(rec.instructions)}`);
+  if (rec.clearing) out.push(`建議處置：${zhGlossary(rec.clearing)}`);
+
+  return out.join("\n");
+}
+
+/* ========================================================
+      Renderer（英文 + 中文 + 建議）
 ======================================================== */
 async function render(rec){
   const box = document.createElement("div");
 
   const head = document.createElement("div");
   head.className = "kv";
-  const title = sanitize(rec.alarm_name||rec.fault_name||"(未命名)");
 
   head.innerHTML = `
-    <div style="font-weight:800;margin-bottom:4px">${title}</div>
+    <div style="font-weight:800;margin-bottom:4px">${sanitize(rec.alarm_name||rec.fault_name||"(未命名)")}</div>
     <div>
       <span class="tag">ID: ${sanitize(rec.id)}</span>
       ${rec.severity ? `<span class="tag">Severity: ${rec.severity}</span>` : ""}
@@ -415,7 +424,8 @@ async function render(rec){
   const adv = document.createElement("div");
   adv.className = "kv";
   adv.style.marginTop = "6px";
-  adv.textContent = "建議：" + "依據設備狀態檢查來源模組、連線與環境。";
+
+  adv.textContent = "建議：依設備狀態檢查風扇、散熱模組、電源與線路。";
 
   detail.appendChild(kv);
   detail.appendChild(zh);
@@ -433,16 +443,46 @@ async function render(rec){
 }
 
 /* ========================================================
-      handle（改成 async）
+      搜尋邏輯
+======================================================== */
+function score(rec, q){
+  const key = q.toLowerCase().trim();
+  let s = 0;
+
+  if (rec.id.toLowerCase() === key) s += 200;
+  if (rec.id.toLowerCase().includes(key)) s += 80;
+
+  if (rec.alarm_name.toLowerCase().includes(key)) s += 40;
+  if (rec.fault_name.toLowerCase().includes(key)) s += 40;
+
+  if (rec.meaning.toLowerCase().includes(key)) s += 20;
+  if (rec.probable_cause.toLowerCase().includes(key)) s += 10;
+
+  return s;
+}
+
+function findByQuery(raw){
+  const q = raw.trim().toLowerCase();
+  if (!q) return [];
+
+  return DATA.map(r=>({ r, s:score(r,q) }))
+             .filter(x=>x.s>0)
+             .sort((a,b)=>b.s-a.s)
+             .slice(0,3)
+             .map(x=>x.r);
+}
+
+/* ========================================================
+      handle
 ======================================================== */
 async function handle(raw){
-  const q = raw.trim();
-  if (!q){
+  const txt = raw.trim();
+  if (!txt){
     add("請輸入內容。");
     return;
   }
 
-  const hits = findByQuery(q);
+  const hits = findByQuery(txt);
   if (!hits.length){
     add("沒有找到相符的資料。");
     return;
@@ -455,15 +495,7 @@ async function handle(raw){
 }
 
 /* ========================================================
-      搜尋
-======================================================== */
-function findByQuery(q){
-  const key = q.trim().toLowerCase();
-  return DATA.filter(r => r.id.toLowerCase().includes(key));
-}
-
-/* ========================================================
-      發送
+      傳送事件
 ======================================================== */
 send.onclick = async ()=>{
   const text = q.value;
@@ -471,24 +503,24 @@ send.onclick = async ()=>{
   add(text, true);
   await handle(text);
 };
-q.onkeydown = e=>{
-  if (e.key==="Enter") send.click();
-};
+q.onkeydown = e=>{ if (e.key==="Enter") send.click(); };
 
 /* ========================================================
-      初始化
+      初始化 JSON
 ======================================================== */
 (async function init(){
   try{
     const r = await fetch("./alarm_fault_final_merged.json?t="+Date.now());
-    const j = await r.json();
+    const raw = await r.json();
 
-    DATA = j.alarm_fault_map.map(normalizeRow);
+    DATA = flattenAny(raw);
+
     hint.textContent = `已載入 ${DATA.length} 筆資料`;
 
     add("您好！請輸入 Alarm/Fault ID（如 7115-2）或關鍵字查詢。");
 
   }catch(e){
+    console.error(e);
     hint.textContent = "JSON 載入失敗。";
   }
 })();
