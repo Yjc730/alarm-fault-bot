@@ -415,7 +415,7 @@ function findByQuery(raw){
 /* ========================================================
       中文摘要 + 建議
 ======================================================== */
-function toChinese(rec){
+async function toChinese(rec){
   const lines = [];
   if (rec.alarm_name || rec.fault_name)
     lines.push(`告警/故障：${zhFull(rec.alarm_name)} / ${zhFull(rec.fault_name)}`);
@@ -426,14 +426,22 @@ function toChinese(rec){
   if (rec.ttl) lines.push(`TTL：${zhFull(rec.ttl)}`);
   if (rec.product) lines.push(`適用產品：${zhFull(rec.product)}`);
 
-  /* 來源現在永遠是單行 */
   if (rec.source) lines.push(`來源：${zhFull(rec.source)}`);
 
-  if (rec.effect) lines.push(`影響：${zhFull(rec.effect)}`);
+  /* ★ 修正：Effect 在有開 LLM 時要送去 translateWithLLM */
+  if (rec.effect){
+    if (useLLM()){
+      lines.push(`影響：${await translateWithLLM(rec.effect)}`);
+    } else {
+      lines.push(`影響：${zhFull(rec.effect)}`);
+    }
+  }
+
   if (rec.instructions) lines.push(`處置指示：${zhFull(rec.instructions)}`);
   if (rec.clearing) lines.push(`建議處置：${zhFull(rec.clearing)}`);
   return lines.join("\n");
 }
+
 
 function advice(rec){
   const meaning = sanitize(rec.meaning).toLowerCase();
