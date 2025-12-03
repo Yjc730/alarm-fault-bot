@@ -398,18 +398,19 @@ async function render(rec){
   const products = sanitize(rec.product).split(/[,;]\s*/).filter(Boolean);
   const productTags = products.map(p=>`<span class="tag">${p}</span>`).join(" ");
 
-  kv.innerHTML = `
-    ${rec.alarm_name ? `<div><b>Alarm Name：</b>${rec.alarm_name}</div>`:""}
-    ${rec.fault_name ? `<div><b>Fault Name：</b>${rec.fault_name}</div>`:""}
-    ${rec.meaning ? `<div><b>Meaning：</b>${rec.meaning}</div>`:""}
-    ${rec.probable_cause ? `<div><b>Probable Cause：</b>${rec.probable_cause}</div>`:""}
-    ${rec.source ? `<div><b>Source：</b>${rec.source}</div>`:""}
-    ${rec.effect ? `<div><b>Effect：</b>${rec.effect}</div>`:""}
-    ${rec.instructions ? `<div><b>Instructions：</b>${rec.instructions}</div>`:""}
-    ${rec.clearing ? `<div><b>Clearing：</b>${rec.clearing}</div>`:""}
-    ${rec.ttl ? `<div><b>Time To Live：</b>${rec.ttl}</div>`:""}
-    ${productTags ? `<div><b>Used In Product：</b>${productTags}</div>`:""}
-  `;
+kv.innerHTML = `
+${rec.alarm_name ? `<div><b>Alarm Name：</b>${rec.alarm_name}</div>` : ""}
+${rec.fault_name ? `<div><b>Fault Name：</b>${rec.fault_name}</div>` : ""}
+${rec.meaning ? `<div><b>Meaning：</b>${rec.meaning}</div>` : ""}
+${rec.probable_cause ? `<div><b>Probable Cause：</b>${rec.probable_cause}</div>` : ""}
+${rec.source ? `<div><b>Source：</b>${rec.source}</div>` : ""}
+${rec.effect ? `<div><b>Effect：</b>${rec.effect}</div>` : ""}
+${rec.instructions ? `<div><b>Instructions：</b>${rec.instructions}</div>` : ""}
+${rec.clearing ? `<div><b>Clearing：</b>${rec.clearing}</div>` : ""}
+${rec.ttl ? `<div><b>Time To Live：</b>${rec.ttl}</div>` : ""}
+${productTags ? `<div><b>Used In Product：</b>${productTags}</div>` : ""}
+`;
+
 
   const zh = document.createElement("div");
   zh.className = "kv";
