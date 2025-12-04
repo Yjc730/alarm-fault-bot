@@ -333,7 +333,7 @@ async function toChineseLLM(rec){
   const ttl     = zhFull(rec.ttl);
   const product = zhFull(rec.product);
   const source  = zhFull(rec.source);
-  const effect  = await translateWithLLM(rec.effect);
+  const effect = zhFull(rec.effect);
   const instr   = await translateWithLLM(rec.instructions);
 
   const lines = [];
