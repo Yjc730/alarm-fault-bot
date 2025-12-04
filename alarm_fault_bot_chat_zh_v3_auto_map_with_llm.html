@@ -178,7 +178,7 @@ const qs = new URLSearchParams(location.search);
 const TRANSLATE_API = qs.get('api') || DEFAULT_API;
 
 /* ===================== 專有名詞白名單 ===================== */
-/* 這些字完全不翻譯（保留專有名詞英文） */
+/* 這些字完全不翻譯（Q2：保留專有名詞英文） */
 const NO_TRANSLATE = [
   'SMOD','BBMOD','SBTS','BTS','FDD','TDD','ALD',
   'RF','GPS','VSWR','PLL','DC','AC','PSU'
@@ -229,10 +229,7 @@ const PHRASE_GLOSSARY = [
   ["BASE STATION INFORMATION","基地站資訊"],
   ["autonomous reset notification","自動重置通知"],
   ["unit temperature is high","單元溫度過高"],
-  ["sw download failed","軟體下載失敗"],
-  // Effect 常見句子（避免 The + 混英中）
-  ["The operation of the BTS decreases.","BTS 的運作效能降低。"],
-  ["The operation of BTS decreases.","BTS 的運作效能降低。"]
+  ["sw download failed","軟體下載失敗"]
 ];
 
 function zhGlossary(text){
@@ -324,7 +321,7 @@ async function translateWithLLM(text){
   return await p;
 }
 
-/* ===================== LLM 中文段落（自然中文為主） ===================== */
+/* ===================== LLM 中文段落（Q2 中文為主） ===================== */
 async function toChineseLLM(rec){
   const alarm   = await translateWithLLM(rec.alarm_name);
   const fault   = await translateWithLLM(rec.fault_name);
@@ -336,8 +333,7 @@ async function toChineseLLM(rec){
   const ttl     = zhFull(rec.ttl);
   const product = zhFull(rec.product);
   const source  = zhFull(rec.source);
-  // Effect 也送 LLM，避免奇怪混合句
-  const effect  = await translateWithLLM(rec.effect);
+  const effect = zhFull(rec.effect);
   const instr   = await translateWithLLM(rec.instructions);
 
   const lines = [];
@@ -398,7 +394,7 @@ function normalizeRow(r){
     clearing:      sanitize(pick(r, ALIASES.clearing)),
     ttl:           sanitize(pick(r, ALIASES.ttl)),
     product:       sanitize(pick(r, ALIASES.product)),
-    // Source: 把所有換行變成 " / "，確保 SMOD / BBMOD 同一行
+    // ★ Source: 把所有換行變成 " / "，確保 SMOD / BBMOD 同一行
     source:        sanitize(pick(r, ALIASES.source)).replace(/\s*\n+\s*/g,' / '),
     effect:        sanitize(pick(r, ALIASES.effect)),
     instructions:  sanitize(pick(r, ALIASES.instructions))
