@@ -7,90 +7,116 @@
   <meta name="color-scheme" content="dark"/>
 
   <style>
-    :root { 
-      --bg:#0f1115; 
-      --panel:#161a22; 
-      --line:#252b36; 
-      --text:#e6e6e6; 
-      --muted:#a4afc4; 
-      --accent:#2e6be6; 
+    :root {
+      --bg:#0f1115;
+      --panel:#161a22;
+      --line:#252b36;
+      --text:#e6e6e6;
+      --muted:#a4afc4;
+      --accent:#2e6be6;
     }
-    * { box-sizing: border-box; }
-    body { 
-      margin: 0; 
-      background: var(--bg); 
-      color: var(--text); 
-      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
-                   "Noto Sans TC","PingFang TC","Microsoft JhengHei",
-                   Arial,sans-serif; 
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
+                 "Noto Sans TC","PingFang TC","Microsoft JhengHei",
+                 Arial,sans-serif;
     }
-    .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
-    .title { font-weight: 800; font-size: 20px; }
-    .desc { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .wrap{ max-width:860px; margin:0 auto; padding:16px; }
+    .title{ font-weight:800; font-size:20px; }
+    .desc{ color:var(--muted); font-size:13px; margin-top:4px; }
 
-    .box {
-      margin-top: 12px; border:1px solid var(--line);
-      border-radius: 16px; background: var(--panel);
-      overflow: hidden;
+    .box{
+      margin-top:12px;
+      border:1px solid var(--line);
+      border-radius:16px;
+      background:var(--panel);
+      overflow:hidden;
+    }
+    .msgs{
+      height:64vh;
+      overflow:auto;
+      padding:12px;
     }
 
-    .msgs { height: 64vh; overflow:auto; padding: 12px; }
-
-    .msg { 
-      margin: 8px 0; 
-      display:flex; 
-      gap:8px; 
-      align-items:flex-start; 
+    .msg{
+      margin:8px 0;
+      display:flex;
+      gap:8px;
+      align-items:flex-start;
     }
-    .msg.me { justify-content: flex-end; }
+    .msg.me{ justify-content:flex-end; }
 
-    .bubble { 
-      padding: 10px 12px; 
-      background:#11151e; 
-      border:1px solid var(--line); 
-      border-radius: 12px; 
-      max-width: 85%; 
-      white-space: pre-wrap; 
-      line-height: 1.6; 
+    .bubble{
+      padding:10px 12px;
+      background:#11151e;
+      border:1px solid var(--line);
+      border-radius:12px;
+      max-width:85%;
+      white-space:pre-wrap;
       font-size:13px;
       line-height:1.45;
     }
-    .msg.me .bubble { 
-      background: var(--accent); 
-      border-color: var(--accent); 
-      color: white; 
+    .msg.me .bubble{
+      background:var(--accent);
+      border-color:var(--accent);
+      color:#fff;
     }
 
-    .inputbar {
-      display:flex; gap:8px; padding: 10px; 
-      border-top:1px solid var(--line); background:#121620;
+    .inputbar{
+      display:flex;
+      gap:8px;
+      padding:10px;
+      border-top:1px solid var(--line);
+      background:#121620;
     }
-    .inputbar input {
-      flex:1; padding: 12px; border-radius: 10px; 
-      border:1px solid var(--line); background:#0d1119; color:var(--text);
+    .inputbar input{
+      flex:1;
+      padding:12px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:#0d1119;
+      color:var(--text);
     }
-    .inputbar button {
-      padding: 12px 16px; border-radius: 10px;
-      border:1px solid var(--accent); background: var(--accent);
-      color:white; cursor:pointer;
+    .inputbar button{
+      padding:12px 16px;
+      border-radius:10px;
+      border:1px solid var(--accent);
+      background:var(--accent);
+      color:#fff;
+      cursor:pointer;
     }
 
-    .tag { 
-      display:inline-block; padding:1px 8px; 
-      border:1px solid var(--line); border-radius:999px; 
-      font-size:11px; color:#b9c4db; margin-right:6px; 
+    .tag{
+      display:inline-block;
+      padding:1px 6px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      font-size:11px;
+      color:#b9c4db;
+      margin-right:6px;
     }
 
-    .kv { margin-top:6px; font-size: 13px; color:#c8d1e6; }
-    .kv b { color:#9fb0d9; }
-    .subtle { color:#9aa6bd; font-size:12px; }
+    .kv{
+      margin-top:6px;
+      font-size:13px;
+      color:#c8d1e6;
+    }
+    .kv b{ color:#9fb0d9; }
+    .kv div{ margin:4px 0; }   /* Q1: 2 正常緊 */
 
-    .kv div { margin: 2px 0; }
+    .subtle{ color:#9aa6bd; font-size:12px; }
 
     .btn-more{
-      margin-top:6px; padding:4px 8px;
-      border:1px solid var(--line); background:#1a1e2a;
-      color:#b9c4db; border-radius:6px; cursor:pointer;
+      margin-top:6px;
+      padding:4px 8px;
+      border:1px solid var(--line);
+      background:#1a1e2a;
+      color:#b9c4db;
+      border-radius:6px;
+      cursor:pointer;
     }
     .btn-more:hover{ filter:brightness(1.08); }
   </style>
@@ -99,7 +125,7 @@
   <div class="wrap">
     <div class="title">Alarm-Fault 對話機器人（自動欄位對應）</div>
     <div class="desc">
-      輸入 ID（如 <b>7115-2</b>）或自然語句（如「7115-2 是什麼？」「該怎麼辦」）。
+      輸入 ID（如 <b>7115-2</b>）或自然語句（如「<i>7115-2 是什麼？</i>」「<i>該怎麼辦</i>」）。
       <span class="tag">資料僅來自本地 JSON</span>
       <span class="tag">LLM 翻譯（英文→繁中）</span>
     </div>
@@ -107,12 +133,14 @@
     <div class="box">
       <div id="msgs" class="msgs"></div>
       <div class="inputbar">
-        <input id="q" type="text" placeholder="試試輸入：7115-2 / antenna fault / 7115-2 是什麼？">
+        <input id="q" type="text"
+               placeholder="試試：7115-2 是什麼？ / 7115-2 要怎麼處理 / antenna fault">
         <button id="send">送出</button>
       </div>
 
       <label class="subtle" style="display:block;margin:6px 12px 0">
-        <input id="useLLM" type="checkbox"> 啟用 LLM 翻譯（英文→繁中）
+        <input id="useLLM" type="checkbox">
+        啟用 LLM 翻譯（僅英文→繁中）
       </label>
     </div>
 
@@ -120,412 +148,12 @@
   </div>
 
 <script>
-/* ========================================================
-      UI 基礎
-======================================================== */
-const msgs = document.getElementById('msgs');
-const q = document.getElementById('q');
-const send = document.getElementById('send');
-const hint = document.getElementById('hint');
+/* ===================== 基本 UI ===================== */
+const msgs  = document.getElementById('msgs');
+const q     = document.getElementById('q');
+const send  = document.getElementById('send');
+const hint  = document.getElementById('hint');
+const llmBox = document.getElementById('useLLM');
 
 let DATA = [];
-let lastHit = null;
-
-function add(content, me=false){
-  const row = document.createElement('div');
-  row.className = 'msg' + (me ? ' me' : '');
-  const b = document.createElement('div');
-  b.className = 'bubble';
-  if (typeof content === 'string') b.textContent = content;
-  else b.appendChild(content);
-  row.appendChild(b);
-  msgs.appendChild(row);
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function sanitize(s){ return (s ?? '').toString(); }
-
-/* ========================================================
-      字典翻譯（避免 BBMOD → 基頻MOD）
-======================================================== */
-const GLOSSARY = [
-  ["alarm","告警"],["fault","故障"],["warning","警告"],["critical","嚴重"],
-  ["major","重大"],["minor","次要"],["cleared","已清除"],["clear","清除"],
-  ["active","啟動"],["inactive","未啟動"],["power","電源"],["voltage","電壓"],
-  ["current","電流"],["overvoltage","過電壓"],["undervoltage","欠壓"],
-  ["overcurrent","過電流"],["short circuit","短路"],["battery","電池"],
-  ["rectifier","整流器"],["temperature","溫度"],["overheat","過熱"],
-  ["fan","風扇"],["cooling","散熱"],["antenna","天線"],["feeder","饋線"],
-  ["vswr","駐波比"],["rf","射頻"],["transmitter","發射端"],
-  ["receiver","接收端"],["uplink","上行"],["downlink","下行"],
-  ["baseband","基頻"], 
-  ["cabinet","機櫃"],["synchronization","同步"],["gps","GPS"],
-  ["clock","時鐘"],["pll","鎖相迴路"],["module","模組"],["board","板卡"],
-  ["unit","單元"],["port","埠"],["link down","鏈路中斷"],["link","鏈路"],
-  ["software","軟體"],["firmware","韌體"],["hardware","硬體"],
-  ["configuration","設定"],["timeout","逾時"],["restart","重啟"],
-  ["reboot","重新啟動"],["failure","失效"],["degraded","效能降低"],
-  ["maintenance","維護"],["threshold","門槛"],["interference","干擾"],
-  ["jam","阻塞"],["congestion","壅塞"],["site","站點"],["node","節點"],
-  ["sector","扇區"],["cell","小區"]
-];
-
-function zhGlossary(text){
-  let out = sanitize(text);
-  for(const [en, zh] of GLOSSARY){
-    const re = new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
-    out = out.replace(re, zh);
-  }
-  return out;
-}
-
-/* ========================================================
-      白名單保護（避免技術詞被翻譯）
-======================================================== */
-const NO_TRANSLATE = ["SMOD","BBMOD","MOD","BTS","SBTS","FDD","TDD","ALD"];
-
-function protectWords(t){
-  let out = t;
-  for(const w of NO_TRANSLATE){
-    out = out.replaceAll(w, `__${w}__`);
-  }
-  return out;
-}
-function restoreWords(t){
-  let out = t;
-  for(const w of NO_TRANSLATE){
-    out = out.replaceAll(`__${w}__`, w);
-  }
-  return out;
-}
-
-/* ========================================================
-      LLM 翻譯流程
-======================================================== */
-const translateCache = new Map();
-const inflight = new Map();
-const llmBox = document.getElementById("useLLM");
-
-llmBox.checked = localStorage.getItem("USE_LLM")==="1";
-llmBox.onchange = ()=> localStorage.setItem("USE_LLM", llmBox.checked?"1":"0");
-
-const DEFAULT_API = "https://translate-api-v2.vercel.app/api/translate";
-const TRANSLATE_API = DEFAULT_API;
-
-async function translateWithLLM(text){
-  const src = (text ?? "").trim();
-  if (!src) return "";
-
-  const protectedSrc = protectWords(src);
-
-  if (translateCache.has(protectedSrc))
-    return restoreWords(translateCache.get(protectedSrc));
-
-  if (/[\u4e00-\u9fff]/.test(src)){
-    translateCache.set(protectedSrc, protectedSrc);
-    return src;
-  }
-
-  if (!llmBox.checked){
-    const r = zhGlossary(src);
-    translateCache.set(protectedSrc, r);
-    return r;
-  }
-
-  if (inflight.has(protectedSrc))
-    return inflight.get(protectedSrc);
-
-  const p = (async ()=>{
-    try{
-      const r = await fetch(TRANSLATE_API,{
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({ text: protectedSrc })
-      });
-      const j = await r.json();
-      const zh = j.zh || zhGlossary(src);
-      const restored = restoreWords(zh);
-      translateCache.set(protectedSrc, restored);
-      return restored;
-    }catch(e){
-      const fallback = restoreWords(zhGlossary(src));
-      translateCache.set(protectedSrc, fallback);
-      return fallback;
-    }finally{
-      inflight.delete(protectedSrc);
-    }
-  })();
-
-  inflight.set(protectedSrc, p);
-  return p;
-}
-
-/* ========================================================
-      中文 LLM 段落
-======================================================== */
-async function toChineseLLM(rec){
-  const out = [];
-
-  const alarm = await translateWithLLM(rec.alarm_name);
-  const fault = await translateWithLLM(rec.fault_name);
-  const meaning = await translateWithLLM(rec.meaning);
-  const cause = await translateWithLLM(rec.probable_cause);
-  const severity = zhGlossary(rec.severity);
-  const evt = zhGlossary(rec.event_type);
-  const product = zhGlossary(rec.product);
-  const source = zhGlossary(rec.source);
-  const effect = await translateWithLLM(rec.effect);
-  const instructions = await translateWithLLM(rec.instructions);
-  const clearing = await translateWithLLM(rec.clearing);
-  const ttl = zhGlossary(rec.ttl);
-
-  if (alarm||fault) out.push(`告警/故障：${alarm} / ${fault}`);
-  if (meaning) out.push(`現象：${meaning}`);
-  if (cause) out.push(`可能原因：${cause}`);
-  if (severity) out.push(`嚴重度：${severity}`);
-  if (evt) out.push(`事件類型：${evt}`);
-  if (ttl) out.push(`TTL：${ttl}`);
-  if (product) out.push(`適用產品：${product}`);
-  if (source) out.push(`來源：${source}`);
-  if (effect) out.push(`影響：${effect}`);
-  if (instructions) out.push(`處置指示：${instructions}`);
-  if (clearing) out.push(`建議處置：${clearing}`);
-
-  return out.join("\n");
-}
-
-/* ========================================================
-      JSON 資料欄位 normalize（含 Source 單行）
-======================================================== */
-function pick(obj, keys){
-  const K = Object.keys(obj);
-  for(const key of keys){
-    let hit = K.find(k=>k.toLowerCase()===key.toLowerCase());
-    if (hit) return obj[hit];
-  }
-  return "";
-}
-
-function normalizeRow(r){
-  return {
-    id: sanitize(pick(r,["id","alert number (alarm-fault)"])),
-    alarm_name: sanitize(pick(r,["alarm name"])),
-    fault_name: sanitize(pick(r,["fault name"])),
-    meaning: sanitize(pick(r,["meaning"])),
-    probable_cause: sanitize(pick(r,["probable cause"])),
-    severity: sanitize(pick(r,["severity"])),
-    event_type: sanitize(pick(r,["event type"])),
-    clearing: sanitize(pick(r,["clearing"])),
-    ttl: sanitize(pick(r,["time to live"])),
-    product: sanitize(pick(r,["used in product","product"])),
-    source: sanitize(pick(r,["source"])).replace(/\s*\n\s*/g," / "),
-    effect: sanitize(pick(r,["effect"])),
-    instructions: sanitize(pick(r,["instructions"]))
-  };
-}
-
-/* ========================================================
-      flattenAny（支援 map/alarm/fault）
-======================================================== */
-function flattenAny(raw){
-  if (Array.isArray(raw)) return raw.map(normalizeRow);
-
-  let out = [];
-  if (Array.isArray(raw.alarm_fault_map)) out = out.concat(raw.alarm_fault_map.map(normalizeRow));
-  if (Array.isArray(raw.alarm_list)) out = out.concat(raw.alarm_list.map(normalizeRow));
-  if (Array.isArray(raw.fault_list)) out = out.concat(raw.fault_list.map(normalizeRow));
-  return out;
-}
-
-/* ========================================================
-      中文摘要（非 LLM）
-======================================================== */
-async function toChinese(rec){
-  const out = [];
-  if (rec.alarm_name||rec.fault_name)
-    out.push(`告警/故障：${zhGlossary(rec.alarm_name)} / ${zhGlossary(rec.fault_name)}`);
-
-  if (rec.meaning) out.push(`現象：${zhGlossary(rec.meaning)}`);
-  if (rec.probable_cause) out.push(`可能原因：${zhGlossary(rec.probable_cause)}`);
-  if (rec.severity) out.push(`嚴重度：${zhGlossary(rec.severity)}`);
-  if (rec.event_type) out.push(`事件類型：${zhGlossary(rec.event_type)}`);
-  if (rec.ttl) out.push(`TTL：${zhGlossary(rec.ttl)}`);
-  if (rec.product) out.push(`適用產品：${zhGlossary(rec.product)}`);
-  if (rec.source) out.push(`來源：${zhGlossary(rec.source)}`);
-
-  if (rec.effect){
-    if (llmBox.checked)
-      out.push(`影響：${await translateWithLLM(rec.effect)}`);
-    else
-      out.push(`影響：${zhGlossary(rec.effect)}`);
-  }
-
-  if (rec.instructions) out.push(`處置指示：${zhGlossary(rec.instructions)}`);
-  if (rec.clearing) out.push(`建議處置：${zhGlossary(rec.clearing)}`);
-
-  return out.join("\n");
-}
-
-/* ========================================================
-      Renderer（英文 + 中文 + 建議）
-======================================================== */
-async function render(rec){
-  const box = document.createElement("div");
-
-  const head = document.createElement("div");
-  head.className = "kv";
-
-  head.innerHTML = `
-    <div style="font-weight:800;margin-bottom:4px">${sanitize(rec.alarm_name||rec.fault_name||"(未命名)")}</div>
-    <div>
-      <span class="tag">ID: ${sanitize(rec.id)}</span>
-      ${rec.severity ? `<span class="tag">Severity: ${rec.severity}</span>` : ""}
-      ${rec.event_type ? `<span class="tag">Type: ${rec.event_type}</span>` : ""}
-    </div>
-  `;
-
-  const btn = document.createElement("button");
-  btn.className = "btn-more";
-  btn.textContent = "展開詳情 ▼";
-  head.appendChild(btn);
-
-  const detail = document.createElement("div");
-  detail.style.display = "none";
-
-  const kv = document.createElement("div");
-  kv.className = "kv";
-
-  const products = sanitize(rec.product).split(/[,;]\s*/).filter(Boolean);
-  const productTags = products.map(p=>`<span class="tag">${p}</span>`).join(" ");
-
-kv.innerHTML = `
-${rec.alarm_name ? `<div><b>Alarm Name：</b>${rec.alarm_name}</div>` : ""}
-${rec.fault_name ? `<div><b>Fault Name：</b>${rec.fault_name}</div>` : ""}
-${rec.meaning ? `<div><b>Meaning：</b>${rec.meaning}</div>` : ""}
-${rec.probable_cause ? `<div><b>Probable Cause：</b>${rec.probable_cause}</div>` : ""}
-${rec.source ? `<div><b>Source：</b>${rec.source}</div>` : ""}
-${rec.effect ? `<div><b>Effect：</b>${rec.effect}</div>` : ""}
-${rec.instructions ? `<div><b>Instructions：</b>${rec.instructions}</div>` : ""}
-${rec.clearing ? `<div><b>Clearing：</b>${rec.clearing}</div>` : ""}
-${rec.ttl ? `<div><b>Time To Live：</b>${rec.ttl}</div>` : ""}
-${productTags ? `<div><b>Used In Product：</b>${productTags}</div>` : ""}
-`;
-
-
-  const zh = document.createElement("div");
-  zh.className = "kv";
-  zh.style.whiteSpace = "pre-wrap";
-  zh.style.marginTop = "8px";
-  zh.textContent = llmBox.checked ? "翻譯中…" : await toChinese(rec);
-
-  if (llmBox.checked){
-    toChineseLLM(rec).then(txt=> zh.textContent = txt);
-  }
-
-  const adv = document.createElement("div");
-  adv.className = "kv";
-  adv.style.marginTop = "6px";
-
-  adv.textContent = "建議：依設備狀態檢查風扇、散熱模組、電源與線路。";
-
-  detail.appendChild(kv);
-  detail.appendChild(zh);
-  detail.appendChild(adv);
-
-  btn.onclick = ()=>{
-    const open = detail.style.display==="block";
-    detail.style.display = open ? "none" : "block";
-    btn.textContent = open ? "展開詳情 ▼" : "收起 ▲";
-  };
-
-  box.appendChild(head);
-  box.appendChild(detail);
-  return box;
-}
-
-/* ========================================================
-      搜尋邏輯
-======================================================== */
-function score(rec, q){
-  const key = q.toLowerCase().trim();
-  let s = 0;
-
-  if (rec.id.toLowerCase() === key) s += 200;
-  if (rec.id.toLowerCase().includes(key)) s += 80;
-
-  if (rec.alarm_name.toLowerCase().includes(key)) s += 40;
-  if (rec.fault_name.toLowerCase().includes(key)) s += 40;
-
-  if (rec.meaning.toLowerCase().includes(key)) s += 20;
-  if (rec.probable_cause.toLowerCase().includes(key)) s += 10;
-
-  return s;
-}
-
-function findByQuery(raw){
-  const q = raw.trim().toLowerCase();
-  if (!q) return [];
-
-  return DATA.map(r=>({ r, s:score(r,q) }))
-             .filter(x=>x.s>0)
-             .sort((a,b)=>b.s-a.s)
-             .slice(0,3)
-             .map(x=>x.r);
-}
-
-/* ========================================================
-      handle
-======================================================== */
-async function handle(raw){
-  const txt = raw.trim();
-  if (!txt){
-    add("請輸入內容。");
-    return;
-  }
-
-  const hits = findByQuery(txt);
-  if (!hits.length){
-    add("沒有找到相符的資料。");
-    return;
-  }
-
-  const rec = hits[0];
-  lastHit = rec;
-
-  add(await render(rec));
-}
-
-/* ========================================================
-      傳送事件
-======================================================== */
-send.onclick = async ()=>{
-  const text = q.value;
-  q.value = "";
-  add(text, true);
-  await handle(text);
-};
-q.onkeydown = e=>{ if (e.key==="Enter") send.click(); };
-
-/* ========================================================
-      初始化 JSON
-======================================================== */
-(async function init(){
-  try{
-    const r = await fetch("./alarm_fault_final_merged.json?t="+Date.now());
-    const raw = await r.json();
-
-    DATA = flattenAny(raw);
-
-    hint.textContent = `已載入 ${DATA.length} 筆資料`;
-
-    add("您好！請輸入 Alarm/Fault ID（如 7115-2）或關鍵字查詢。");
-
-  }catch(e){
-    console.error(e);
-    hint.textContent = "JSON 載入失敗。";
-  }
-})();
-</script>
-
-</body>
-</html>
+let
